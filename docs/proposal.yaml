@@ -1,0 +1,57 @@
+# Design choices only. No experiment runner reads this file yet.
+# Not an approved experimental protocol or a claim of full guideline compliance.
+status: proposed_pending_instructor_scope_confirmation
+project:
+  course: CBCA315
+  topic: 2
+  title: Budgeted LLM Refinement for Community Detection in Citation Networks
+  contributors: 1
+data:
+  proposed_real_datasets: [cora, pubmed]
+  synthetic_sanity_check: stochastic_block_model
+  source: TAPE raw texts and matching citation graph IDs
+  protocol_matches_approved_base_paper: false
+  node_text: title_and_abstract_without_label_metadata
+  graph: simple_undirected_preserving_all_valid_nodes
+embedding:
+  model: sentence-transformers/all-MiniLM-L6-v2
+  revision: null  # Record an exact model revision before the first embedding run.
+  normalize: true
+  max_wordpieces: 256
+method:
+  detectors: [asynchronous_label_propagation, leiden, infomap]
+  variants: [structure_only, embedding_weights, selective_llm_weights]
+  ambiguity_band: [0.3, 0.6]  # Heuristic from guide, not calibrated uncertainty.
+  selection_rule: closest_to_band_midpoint_then_stable_edge_id
+  max_fraction_of_all_edges: 0.10
+  max_edges_per_dataset: 2000
+  positive_weight_floor: 0.000001
+llm:
+  api_base: https://openrouter.ai/api/v1
+  model: meta-llama/llama-3.1-8b-instruct
+  provider_only: [deepinfra/fp8]
+  allow_fallbacks: false
+  require_parameters: true
+  temperature: 0
+  max_tokens: 16
+  output: integer_0_to_10
+  max_characters_per_document: 600
+  pilot_max_unique_edges: 50
+  max_price_usd_per_million_input_tokens: 0.02
+  max_price_usd_per_million_output_tokens: 0.04
+  experiment_spend_ceiling_usd: 1.00
+  calls_enabled: false
+  # Spending controls above are proposed settings, not implemented safeguards yet.
+evaluation:
+  seeds: [0, 1, 2, 3, 4]
+  primary_metric: nmi_arithmetic
+  secondary_metrics: [ari, hungarian_accuracy, hungarian_macro_f1, original_graph_modularity]
+  resource_metrics: [wall_time, peak_memory, api_attempts, input_tokens, output_tokens, actual_api_cost]
+  significance: exact_two_sided_paired_wilcoxon_with_small_sample_caveat
+  fixed_llm_cache_across_detector_seeds: true
+downstream:
+  model: independent_cascade
+  datasets: [cora, pubmed]
+  seed_counts: [5, 10, 20, 50]
+  activation_probability: 0.05
+  simulations_per_setting: 200

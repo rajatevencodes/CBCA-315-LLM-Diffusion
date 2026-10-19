@@ -1,0 +1,4 @@
+dataset,nodes,edges,classes,avg_degree,avg_words
+cora,2708,5278,7,3.9,137.5
+pubmed,19716,44323,3,4.5,241.2
+synthetic,400,2682,4,13.41,12.0
