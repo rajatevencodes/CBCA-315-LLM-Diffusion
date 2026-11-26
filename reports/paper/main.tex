@@ -211,7 +211,7 @@ Synthetic & 400 & 2,682 & 4 planted & 12 topic words \\
 \end{tabular}
 \end{table}
 
-Preprocessing is the same for every method. Citations are made undirected, and self-loops and duplicate edges are removed. All nodes are kept. One PubMed paper (PMID 17874530) has no title or abstract, so it is removed together with its one edge. Class labels are used only to compute NMI, ARI, ACC and macro-F1.
+Preprocessing is the same for every method. Citations are made undirected, and self-loops and duplicate edges are removed. All other nodes are kept. One PubMed paper (PMID 17874530) has no title or abstract, so it is removed together with its one edge. Class labels are used only to compute NMI, ARI, ACC and macro-F1.
 
 \subsection{Text alignment}
 The reference loader of the TAPE repository pairs PubMed text with nodes by row position. The text file has one record without a PMID at row 2,459, so every later row would get the wrong paper. Its Cora loader also keeps the previous paper's abstract when a paper has none. Our loader joins both datasets by paper ID and uses only the paper's own text.
@@ -220,10 +220,10 @@ The reference loader of the TAPE repository pairs PubMed text with nodes by row 
 The baselines are W0 and W1 with each of the three detectors, and W2 with randomly chosen edges and the same number of calls. Leiden is always included. We run every method ourselves under one protocol. We do not import published scores from TAPE, ComGPT or CommLLM, because those papers solve other tasks: supervised classification, local community search and whole-graph prompting. If a published clustering baseline is required, CDBNE \cite{zhou2023} is the fallback.
 
 \subsection{Implementation}
-Label propagation uses NetworkX (\texttt{asyn\_lpa\_communities}). Leiden and Infomap use python-igraph, with Leiden maximising modularity and Infomap running 10 trials. Python's random generator is seeded before each igraph call. The code uses Python 3.13.15, NetworkX 3.7, python-igraph 1.0.0, sentence-transformers 5.7.0, PyTorch 2.14.1 (CPU), scikit-learn 1.9.1 and SciPy 1.18.1. The embedding model is pinned to Hugging Face revision \texttt{1110a243}. Experiments ran in a Linux (aarch64) virtual machine with 4 vCPUs and 4 GB of RAM, on CPU only.
+Label propagation uses NetworkX (\texttt{asyn\_lpa\_communities}). Leiden and Infomap use python-igraph, with Leiden maximising modularity and Infomap running 10 trials. Python's random generator is seeded before each igraph call. The code uses Python 3.13, NetworkX 3.7, python-igraph 1.0.0, sentence-transformers 5.7.0, PyTorch 2.14.1 (CPU), scikit-learn 1.9.1 and SciPy 1.18.1. The embedding model is pinned to Hugging Face revision \texttt{1110a243}. Experiments ran in a Linux (aarch64) virtual machine with 4 vCPUs and 4 GB of RAM, on CPU only.
 
 \subsection{LLM provider}
-The 8B model ran on the OpenRouter provider \texttt{deepinfra/fp8}, pinned with no fallback. The 70B ablation model (\texttt{meta-llama/llama-3.1-70b-instruct}) ran on \texttt{amazon-bedrock}, because on 26 November 2026 it was the only provider OpenRouter listed for that model. The ledger also holds 100 calls of the 8B model that were served by \texttt{groq} during a short provider switch: 50 for the Cora W2 run and 50 for a prompt check.
+The 8B model ran on the OpenRouter provider \texttt{deepinfra/fp8}, pinned with no fallback. The 70B ablation model (\texttt{meta-llama/llama-3.1-70b-instruct}) ran on \texttt{amazon-bedrock}, because on 26 November 2026 it was the only provider OpenRouter listed for that model. The ledger also holds 100 calls of the 8B model that were served by \texttt{groq} during a short provider switch: 50 for an early pilot and 50 for a prompt check. None of these 100 answers is used in the results.
 
 \subsection{Protocol}
 \begin{itemize}
@@ -286,7 +286,7 @@ Cora and PubMed with original text come from the release linked in the TAPE repo
 R. Sharma designed and implemented the pipeline, ran the experiments and wrote the paper. Dr. Soumita Das supervised the project as guide.
 
 \paragraph{Use of AI}
-An AI assistant helped to write the code and the draft of this paper. The author checked the text, the numbers and the references. The method also uses an LLM (Llama 3.1 8B) as part of the experiments, as described in Section~\ref{sec:method}. % TODO: confirm the tool name and the journal's AI policy wording.
+Claude (Anthropic) was used for research, for understanding the topic, and to help draft the code and the text of this paper. Grammarly was used for grammar checks. The author checked all text, numbers and references and is responsible for the content. The method also uses an LLM (Llama 3.1 8B) as part of the experiments, as described in Section~\ref{sec:method}.
 
 \section*{Acknowledgment}
 The author thanks the project guide, Dr. Soumita Das, Bennett University.
