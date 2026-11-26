@@ -1,0 +1,41 @@
+{
+  "cora": {
+    "archive": "cora_orig.zip",
+    "sha256": "4449b98350598f1e5ed1726923410adf116a6ac3c8fd5dcea40e67ad296869fa",
+    "nodes": 2708,
+    "edges": 5278,
+    "classes": [
+      "Case_Based",
+      "Genetic_Algorithms",
+      "Neural_Networks",
+      "Probabilistic_Methods",
+      "Reinforcement_Learning",
+      "Rule_Learning",
+      "Theory"
+    ],
+    "text_coverage": {
+      "title=True, abstract=True": 2373,
+      "title=True, abstract=False": 293,
+      "title=False, abstract=True": 42
+    }
+  },
+  "pubmed": {
+    "archive": "PubMed_orig.zip",
+    "sha256": "dc562ea54854db62b9311e642ef1c1ba8fbe3d90c5e8e6afc596278fd53ba92f",
+    "nodes": 19716,
+    "edges": 44323,
+    "classes": [
+      "Diabetes Mellitus, Experimental",
+      "Diabetes Mellitus Type 1",
+      "Diabetes Mellitus Type 2"
+    ],
+    "text_coverage": {
+      "with_text": 19716,
+      "no_text_excluded": 1
+    },
+    "excluded_ids": [
+      "17874530"
+    ],
+    "edges_dropped_with_excluded_node": 1
+  }
+}

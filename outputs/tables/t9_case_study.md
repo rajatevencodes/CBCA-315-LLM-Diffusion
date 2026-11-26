@@ -1,0 +1,10 @@
+|   edge_id |   cos |   score |   change | same_class   | helpful   | paper_A                                                                | paper_B                                                                |
+|----------:|------:|--------:|---------:|:-------------|:----------|:-----------------------------------------------------------------------|:-----------------------------------------------------------------------|
+|      4595 |  0.43 |   10.00 |     0.57 | False        | False     | Efficient Locally Weighted Polynomial Regression Predictions           | Bumptrees for Efficient Function, Constraint, and Classification Learn |
+|       710 |  0.43 |   10.00 |     0.56 | True         | True      | On Bayesian analysis of mixtures with an unknown number of components  | BAYESIAN STATISTICS 6, pp. 000--000  Exact sampling for Bayesian infer |
+|      4303 |  0.44 |   10.00 |     0.56 | False        | False     | Learning the Past Tense of English Verbs: The Symbolic Pattern Associa | Error-Correcting Output Codes: A General Method for Improving Multicla |
+|      2590 |  0.44 |   10.00 |     0.56 | True         | True      | Memory Based Stochastic Optimization for Validation and Tuning of Func | Category: Control, Navigation and Planning Preference: Oral presentati |
+|       176 |  0.46 |    5.00 |     0.04 | True         | True      | The Pandemonium System of Reflective Agents                            | Multiple Network Systems (Minos) Modules: Task Division and Module Dis |
+|      3084 |  0.46 |    6.00 |     0.14 | False        | False     | Simplifying Decision Trees: A Survey                                   | NACODAE: Navy Conversational Decision Aids Environment                 |
+|      1258 |  0.47 |    7.00 |     0.23 | True         | True      | Role of Ontology in Creative Understanding                             | Introspective reasoning using meta-explanations for multistrategy lear |
+|        24 |  0.47 |    7.00 |     0.23 | True         | True      | Online Learning versus O*ine Learning                                  | How to Use Expert Advice                                               |

@@ -1,0 +1,120 @@
+{
+  "main_nmi": {
+    "cora/infomap": {
+      "W0": 0.4126,
+      "W1": 0.4171,
+      "W2": 0.4131
+    },
+    "cora/leiden": {
+      "W0": 0.4662,
+      "W1": 0.4541,
+      "W2": 0.4491
+    },
+    "cora/lpa": {
+      "W0": 0.4063,
+      "W1": 0.4063,
+      "W2": 0.4064
+    },
+    "pubmed/infomap": {
+      "W0": 0.1717,
+      "W1": 0.1745,
+      "W2": 0.1719
+    },
+    "pubmed/leiden": {
+      "W0": 0.2082,
+      "W1": 0.2066,
+      "W2": 0.2036
+    },
+    "pubmed/lpa": {
+      "W0": 0.1797,
+      "W1": 0.1844,
+      "W2": 0.1836
+    },
+    "synthetic/infomap": {
+      "W0": 0.0,
+      "W1": 0.988,
+      "W2": 0.988
+    },
+    "synthetic/leiden": {
+      "W0": 0.5603,
+      "W1": 1.0,
+      "W2": 1.0
+    },
+    "synthetic/lpa": {
+      "W0": 0.0,
+      "W1": 1.0,
+      "W2": 0.9894
+    }
+  },
+  "pooled_tests": {
+    "W2 vs W1": {
+      "dataset": "all",
+      "detector": "all",
+      "n": 30,
+      "mean_diff": -0.0026,
+      "wins": 7,
+      "losses": 23,
+      "p_value": 0.0008,
+      "rank_biserial": -0.6731
+    },
+    "W2 vs W0": {
+      "dataset": "all",
+      "detector": "all",
+      "n": 30,
+      "mean_diff": -0.0028,
+      "wins": 14,
+      "losses": 16,
+      "p_value": 0.184,
+      "rank_biserial": -0.2817
+    },
+    "W1 vs W0": {
+      "dataset": "all",
+      "detector": "all",
+      "n": 30,
+      "mean_diff": -0.0003,
+      "wins": 19,
+      "losses": 11,
+      "p_value": 0.5291,
+      "rank_biserial": 0.1355
+    },
+    "W2 vs W2-random": {
+      "dataset": "all",
+      "detector": "all",
+      "n": 30,
+      "mean_diff": -0.0015,
+      "wins": 11,
+      "losses": 19,
+      "p_value": 0.0577,
+      "rank_biserial": -0.3978
+    }
+  },
+  "llm_totals": {
+    "api_attempts": 20071,
+    "failed_attempts": 766,
+    "invalid_answers": 2872,
+    "total_usd": 0.21509820000000002,
+    "total_tokens": 5806111
+  },
+  "sanity_nmi": {
+    "Infomap": {
+      "W0": 0.0,
+      "W1": 0.988,
+      "W2": 0.988
+    },
+    "Leiden": {
+      "W0": 0.5603,
+      "W1": 1.0,
+      "W2": 1.0
+    },
+    "LPA": {
+      "W0": 0.0,
+      "W1": 1.0,
+      "W2": 0.9894
+    }
+  },
+  "llm_vs_class": {
+    "up_weighted_same_class": 0.8012684989429175,
+    "down_weighted_same_class": NaN,
+    "all_band_edges_same_class": 0.8012684989429175
+  }
+}

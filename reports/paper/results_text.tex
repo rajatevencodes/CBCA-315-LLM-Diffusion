@@ -1,0 +1,207 @@
+% Results text. All numbers are copied from outputs/ (summary.json, tables t0 to t9, significance.csv, diffusion.csv, llm/calls.jsonl, embedding_log.json).
+% Labels were used for evaluation only.
+The short answer is a negative one. Re-scoring 10\% of the edges with Llama 3.1 8B did not improve community quality over plain embedding weights. The sections below give the evidence, then the cost.
+
+\subsection{Sanity check on the synthetic graph}
+Table~\ref{tab:sanity} shows the check on the graph with four planted communities. With text weights (W1 and W2) all three detectors recover the planted groups, so the pipeline works. The target of NMI at least 0.9 is met. With W0, label propagation and Infomap return one community and score an NMI of 0.000. Leiden on W0 scores 0.560. Only 63 of the 2,682 synthetic edges fall in the band, so W2 changes few weights here, and W1 and W2 are almost the same.
+
+\begin{table}[!t]
+\centering
+\caption{NMI on the synthetic graph with four planted communities (mean over five seeds).}
+\label{tab:sanity}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Detector & W0 & W1 & W2 \\
+\midrule
+Infomap & 0.000 & 0.988 & 0.988 \\
+Leiden & 0.560 & 1.000 & 1.000 \\
+LPA & 0.000 & 1.000 & 0.989 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Main comparison}
+Table~\ref{tab:main} and Fig.~\ref{fig:main} give the main results. The differences between the three weightings are small. On Cora, Leiden has the highest NMI with W0 (0.466), then W1 (0.454), then W2 (0.449). On PubMed the order for Leiden is the same: 0.208, 0.207 and 0.204. For label propagation and Infomap the three weightings are within 0.005 NMI of each other on both datasets.
+
+Text weights alone (W1) do not clearly beat structure alone (W0). Pooled over 30 paired runs, the mean NMI difference of W1 against W0 is $-0.0003$, with 19 wins and 11 losses ($p=0.5291$, rank-biserial 0.1355). W1 is a little better for Infomap and label propagation on PubMed and for Infomap on Cora. It is worse for Leiden on Cora (mean difference $-0.0120$, W1 lower in all five seeds).
+
+W2 does not beat W1. Pooled over 30 paired runs the mean NMI difference of W2 against W1 is $-0.0026$. W2 wins 7 times and loses 23 times (Wilcoxon $p=0.0008$, rank-biserial $-0.6731$). The loss is small but it is consistent in sign. In single cells (Table~\ref{tab:sig}) the test cannot reach $p<0.05$ with five pairs, because the smallest possible $p$ is 0.0625. PubMed Infomap and PubMed Leiden reach that floor, with W2 lower in all five seeds. W2 against W0 is also not better: mean difference $-0.0028$, 14 wins and 16 losses ($p=0.1840$, rank-biserial $-0.2817$).
+
+On the other metrics the picture is mixed. On Cora, W2 has a slightly higher ACC and macro-F1 than W1 for all three detectors, for example ACC 0.340 against 0.319 for Leiden and 0.111 against 0.090 for label propagation. Its ARI is higher for label propagation and Leiden and a little lower for Infomap. On PubMed, W2 is higher for label propagation (ACC 0.145 against 0.138) and about equal or mixed for Leiden and Infomap. Even so, W0 is the best weighting for Leiden on Cora on ARI (0.253), ACC (0.385) and macro-F1 (0.541). The significance tests were run on NMI. We report these other metrics without a test, and we do not read them as an improvement.
+
+\begin{table*}[!t]
+\centering
+\caption{Paired Wilcoxon signed-rank tests on NMI. Rows with $n=5$ are single dataset and detector cells. The pooled rows ($n=30$) cover both datasets and all detectors. Wins and losses count the first-named variant.}
+\label{tab:sig}
+\small
+\begin{tabular}{@{}lllrrrrrr@{}}
+\toprule
+Comparison & Dataset & Detector & $n$ & Mean diff & Wins & Losses & $p$ & Rank-biserial \\
+\midrule
+W2 vs W1 & Cora & Infomap & 5 & -0.0041 & 1 & 4 & 0.1250 & -0.8667 \\
+W2 vs W1 & Cora & Leiden & 5 & -0.0050 & 2 & 3 & 0.4375 & -0.4667 \\
+W2 vs W1 & Cora & LPA & 5 & 0.0001 & 3 & 2 & 1.0000 & 0.0667 \\
+W2 vs W1 & PubMed & Infomap & 5 & -0.0026 & 0 & 5 & 0.0625 & -1.0000 \\
+W2 vs W1 & PubMed & Leiden & 5 & -0.0030 & 0 & 5 & 0.0625 & -1.0000 \\
+W2 vs W1 & PubMed & LPA & 5 & -0.0008 & 1 & 4 & 0.4375 & -0.4667 \\
+W2 vs W1 & all & all & 30 & -0.0026 & 7 & 23 & 0.0008 & -0.6731 \\
+W2 vs W0 & all & all & 30 & -0.0028 & 14 & 16 & 0.1840 & -0.2817 \\
+W1 vs W0 & all & all & 30 & -0.0003 & 19 & 11 & 0.5291 & 0.1355 \\
+W2 vs W2-random & all & all & 30 & -0.0015 & 11 & 19 & 0.0577 & -0.3978 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+
+\subsection{Ablations}
+Table~\ref{tab:ablation} lists the ablation variants. No variant moves NMI away from W1 by more than 0.006 on either dataset. Only two entries are above W1: random edges with Leiden on Cora (0.4553 against 0.4541) and W2 with label propagation on Cora (0.4064 against 0.4063).
+
+The random-edge control uses the same number of calls on edges picked at random. It does as well as the ambiguous-edge choice. Pooled over 30 pairs, W2 against random-edge W2 has a mean difference of $-0.0015$, with 11 wins and 19 losses ($p=0.0577$, rank-biserial $-0.3978$). So the ambiguity band gives no measurable gain over random selection.
+
+The other ablations change little. Moving the band to $[0.2,0.5]$ or $[0.4,0.7]$ gives NMI within 0.005 of the main band on Cora and within 0.0015 on PubMed. The plain ``topic similarity'' prompt on Cora gives 0.4136, 0.4524 and 0.4041 for Infomap, Leiden and label propagation, close to the main prompt (0.4131, 0.4491 and 0.4064). The larger Llama 3.1 70B model, run on Cora with the same edges, gives 0.4136, 0.4530 and 0.4046. Its Leiden score is the closest to W1 (0.4541) among the LLM variants on Cora, but it does not exceed it.
+
+\begin{table}[!t]
+\centering
+\caption{NMI of ablation variants. W1 is the embedding baseline. PubMed has no 70B or prompt rows because those ablations ran on Cora only.}
+\label{tab:ablation}
+\footnotesize
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Dataset & Variant & Infomap & Leiden & LPA \\
+\midrule
+cora & W1 & 0.4171 & 0.4541 & 0.4063 \\
+cora & W2 & 0.4131 & 0.4491 & 0.4064 \\
+cora & W2-70b & 0.4136 & 0.4530 & 0.4046 \\
+cora & W2-band0.2-0.5 & 0.4120 & 0.4510 & 0.4040 \\
+cora & W2-band0.4-0.7 & 0.4149 & 0.4534 & 0.4061 \\
+cora & W2-prompt-topic & 0.4136 & 0.4524 & 0.4041 \\
+cora & W2-random & 0.4134 & 0.4553 & 0.4042 \\
+pubmed & W1 & 0.1745 & 0.2066 & 0.1844 \\
+pubmed & W2 & 0.1719 & 0.2036 & 0.1836 \\
+pubmed & W2-band0.2-0.5 & 0.1709 & 0.2029 & 0.1821 \\
+pubmed & W2-band0.4-0.7 & 0.1731 & 0.2024 & 0.1829 \\
+pubmed & W2-random & 0.1743 & 0.2058 & 0.1840 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Budget}
+Table~\ref{tab:budget} and Fig.~\ref{fig:budget} show NMI for budgets of 5, 10 and 20\% of the edges, with a budget of 0 being W1. More LLM calls do not raise NMI. On PubMed, Infomap falls from 0.1745 at no budget to 0.1717 at 20\%, and Leiden falls from 0.2066 to 0.2011. On Cora, Leiden is 0.4541 at no budget, 0.4523 at 5\%, 0.4491 at 10\% and 0.4557 at 20\%. The 20\% value is the highest, but it is only 0.0016 above W1. Infomap on Cora stays below W1 at every budget, and label propagation moves by less than 0.0011.
+
+\begin{table}[!t]
+\centering
+\caption{NMI against LLM budget. A budget of 0 is W1. Cost is in US dollars for the 8B model.}
+\label{tab:budget}
+\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Dataset & Budget (\%) & LLM edges & Infomap & Leiden & LPA & Cost \\
+\midrule
+Cora & 0 & 0 & 0.4171 & 0.4541 & 0.4063 & 0.0000 \\
+Cora & 5 & 264 & 0.4131 & 0.4523 & 0.4070 & 0.0016 \\
+Cora & 10 & 528 & 0.4131 & 0.4491 & 0.4064 & 0.0032 \\
+Cora & 20 & 1056 & 0.4125 & 0.4557 & 0.4053 & 0.0065 \\
+PubMed & 0 & 0 & 0.1745 & 0.2066 & 0.1844 & 0.0000 \\
+PubMed & 5 & 2216 & 0.1731 & 0.2038 & 0.1826 & 0.0136 \\
+PubMed & 10 & 4432 & 0.1719 & 0.2036 & 0.1836 & 0.0272 \\
+PubMed & 20 & 8865 & 0.1717 & 0.2011 & 0.1812 & 0.0544 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{What the LLM did}
+Fig.~\ref{fig:band} shows where the band sits in the cosine distribution. In the band, 3,393 of the 5,278 Cora edges and 15,798 of the 44,323 PubMed edges are available to the LLM, so the budget of 10\% is 528 and 4,432 edges.
+
+The pilot showed that the 8B model gives a score of 8 to most edges. The ledger confirms this. Of 15,905 valid answers from the 8B model, 13,027 are an 8, 1,593 are a 9, 864 are a 7 and 304 are a 10. Only 2, 7 and 6 answers are 0, 1 and 2. A near-constant score sets the weight of an edge in the band to about 0.8, whatever the pair of papers. This is a likely reason for the lack of gain, though we did not test it directly. In the summary file, 0.8013 of the edges that the LLM up-weighted join two papers of the same class, which is the same as the share for all band edges (0.8013). The score therefore did not pick out same-class edges better than the band alone (Fig.~\ref{fig:score}).
+
+Table~\ref{tab:case} shows five of the re-scored Cora edges. The model gives a score of 10 to a pair with cosine 0.43 whose papers are in different classes (edge 4595), and also to a pair with cosine 0.44 in different classes (edge 4303). It gives lower scores of 5 to 7 to other edges, three of them between papers of the same class.
+
+\begin{table}[!t]
+\centering
+\caption{Five Cora edges re-scored by the 8B model. Weight change is the absolute change from the W1 weight. Same class says whether both papers have the same true class.}
+\label{tab:case}
+\footnotesize
+\begin{tabular}{@{}rrrrr@{}}
+\toprule
+Edge id & Cosine & LLM score & Weight change & Same class \\
+\midrule
+4595 & 0.43 & 10.00 & 0.57 & no \\
+4303 & 0.44 & 10.00 & 0.56 & no \\
+176 & 0.46 & 5.00 & 0.04 & yes \\
+1258 & 0.47 & 7.00 & 0.23 & yes \\
+24 & 0.47 & 7.00 & 0.23 & yes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{Cost and runtime}
+The ledger holds 20,071 API attempts: 16,433 answered with a valid score, 2,872 with an invalid answer and 766 failed. The total spend is \$0.2151 for 5,806,111 tokens. This count includes retries of failed calls and a prompt check of 150 calls, so it is larger than the number of edges re-scored in the main runs. The main W2 runs cost \$0.0032 on Cora (528 edges) and \$0.0272 on PubMed (4,432 edges). The 20\% budget costs \$0.0065 on Cora and \$0.0544 on PubMed. Table~\ref{tab:cost} gives the cost per model. The 70B model costs far more per call than the 8B model (\$0.000189 against \$0.000006).
+
+Embedding is the main time cost of W1. It takes 63.12 s on Cora and 946.67 s on PubMed, once. Detector times are short. Table~\ref{tab:runtime} gives them with peak memory. The LLM calls added about 1.15 s of latency per call for the 8B model (Table~\ref{tab:cost}), run eight at a time.
+
+\begin{table}[!t]
+\centering
+\caption{LLM cost per model from the call ledger (answered calls, valid or invalid). Failed attempts are not in this table.}
+\label{tab:cost}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Model & Calls & USD per call & Input tokens & Latency (s) \\
+\midrule
+Llama 3.1 70B & 528 & 0.000189 & 259.623106 & 1.017943 \\
+Llama 3.1 8B & 18777 & 0.000006 & 298.911434 & 1.145402 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{table}[!t]
+\centering
+\caption{Detector wall time and peak process memory, and the one-time embedding time.}
+\label{tab:runtime}
+\footnotesize
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Dataset & Detector & Time (s) & Memory (MB) & Embedding (s) \\
+\midrule
+Cora & Infomap & 0.35 & 207.10 & 63.12 \\
+Cora & Leiden & 0.03 & 207.10 & 63.12 \\
+Cora & LPA & 0.08 & 207.10 & 63.12 \\
+PubMed & Infomap & 4.32 & 352.10 & 946.67 \\
+PubMed & Leiden & 0.33 & 352.10 & 946.67 \\
+PubMed & LPA & 2.02 & 352.10 & 946.67 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Downstream influence spread}
+Table~\ref{tab:diffusion} and Fig.~\ref{fig:diffusion} show the Independent Cascade results. Top-degree seeds reach more nodes than seeds from any Leiden community set, for every $k$ on both datasets. For example on PubMed with $k=10$, degree seeds reach 216.93 nodes, against 171.96 for W1 and 147.79 for W2.
+
+W2 communities give worse seeds than W1 communities in most cells. W2 is lower in six of the eight cells (Cora $k=5$, 20 and 50, and PubMed $k=5$, 10 and 50), equal in one (Cora $k=10$) and higher in one (PubMed $k=20$, 270.82 against 263.73). The gap is largest on PubMed with $k=5$ (94.36 against 113.72). The paired test of W2 against W1 has $p<0.005$ in every cell except Cora $k=10$ ($p=1.00$) and Cora $k=50$ ($p=0.26$). The result does not support the idea that W2 communities choose better seed nodes.
+
+\begin{table}[!t]
+\centering
+\caption{Mean influence spread (nodes reached, 200 simulations, $p=0.05$) for seeds from Leiden communities under each weighting and for top-degree seeds. The last column is the $p$ value of W2 against W1 as printed in the results table, rounded to two decimals.}
+\label{tab:diffusion}
+\footnotesize
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Dataset & $k$ & W0 & W1 & W2 & Degree & $p$ \\
+\midrule
+Cora & 5 & 30.68 & 30.68 & 28.85 & 32.02 & 0.00 \\
+Cora & 10 & 42.05 & 42.06 & 42.06 & 47.64 & 1.00 \\
+Cora & 20 & 62.84 & 63.97 & 62.44 & 72.00 & 0.00 \\
+Cora & 50 & 123.75 & 125.02 & 124.67 & 127.12 & 0.26 \\
+PubMed & 5 & 113.09 & 113.72 & 94.36 & 115.31 & 0.00 \\
+PubMed & 10 & 153.24 & 171.96 & 147.79 & 216.93 & 0.00 \\
+PubMed & 20 & 256.24 & 263.73 & 270.82 & 297.80 & 0.00 \\
+PubMed & 50 & 435.38 & 439.53 & 435.80 & 471.28 & 0.00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+

@@ -1,0 +1,23 @@
+{
+  "cora": {
+    "encode_seconds": 63.12,
+    "edges": 5278,
+    "cos_mean": 0.4861,
+    "in_band": 3393,
+    "llm_budget": 528
+  },
+  "pubmed": {
+    "encode_seconds": 946.67,
+    "edges": 44323,
+    "cos_mean": 0.6352,
+    "in_band": 15798,
+    "llm_budget": 4432
+  },
+  "synthetic": {
+    "encode_seconds": 0.66,
+    "edges": 2682,
+    "cos_mean": 0.5913,
+    "in_band": 63,
+    "llm_budget": 268
+  }
+}

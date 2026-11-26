@@ -1,0 +1,300 @@
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{cite}
+\usepackage[hidelinks]{hyperref}
+
+% Placeholder for the result sentence of the abstract (fill after outputs/ is final)
+\newcommand{\abstractresult}{The result is negative. Over 30 paired runs, LLM re-scoring did not beat embedding weights alone: the mean NMI difference was $-0.0026$ (7 wins, 23 losses, Wilcoxon $p=0.0008$). The total LLM cost was \$0.2151.}
+
+\newcommand{\figifexists}[3]{%
+  \IfFileExists{figures/#1.png}{%
+    \begin{figure}[!t]\centering
+      \includegraphics[width=\columnwidth]{figures/#1.png}
+      \caption{#2}\label{#3}
+    \end{figure}}{%
+    \begin{figure}[!t]\centering
+      \textbf{TODO: figure #1.png pending}
+      \caption{#2}\label{#3}
+    \end{figure}}}
+
+\begin{document}
+
+\title{Semantic Diffusion: Budgeted LLM Edge Weights for Community Detection}
+
+\author{Rajat~Sharma%
+\thanks{R. Sharma is with the Bennett University, India (e-mail: S24BCAU0134@bennett.edu.in; confirm address).}}
+
+\markboth{IEEE Transactions on Computational Social Systems (manuscript draft)}%
+{Sharma: Semantic Diffusion}
+
+\maketitle
+
+\begin{abstract}
+Community detection methods that simulate how information spreads usually treat every citation as equally strong. The text of the papers is ignored. We study a cheap way to add it. Every edge of a citation network is weighted by the cosine similarity of the two papers' sentence embeddings. A small language model, Llama 3.1 8B, then re-scores only the most ambiguous 10\% of edges, those whose cosine lies between 0.3 and 0.6. We ask whether this limited use of the model improves the communities enough to justify its cost. We compare three edge weightings (structure only, embedding, and embedding with LLM re-scoring) under three detectors: label propagation, Leiden and Infomap. Experiments use Cora and PubMed with their original titles and abstracts, a synthetic graph with planted communities, five random seeds and a spending ceiling of one US dollar. We report NMI, ARI, accuracy, macro-F1 and modularity, together with the number of LLM calls and their cost. Ablations cover random edge choice, shifted bands, prompt wording, model size and budget. A downstream Independent Cascade task tests whether the communities give better seed nodes. We also fix two text alignment problems in a public data loader. \abstractresult
+\end{abstract}
+
+\begin{IEEEkeywords}
+community detection, citation networks, large language models, edge weights, label propagation, Leiden, Infomap, information diffusion.
+\end{IEEEkeywords}
+
+\IEEEpeerreviewmaketitle
+
+%==================================================================
+\section{Introduction}
+\label{sec:intro}
+A citation network is a social network of ideas. Each paper is a node and each citation is an edge. Papers on the same subject cite each other more often, so groups of densely connected papers, called communities, usually match research areas. Finding these groups automatically is called community detection \cite{fortunato2010}.
+
+Many detection methods work by simulating how information spreads. Label propagation lets every node adopt the most common label among its neighbours until the labels settle \cite{raghavan2007}. Infomap follows a random walker and finds groups where the walker stays for a long time \cite{rosvall2008}. Leiden moves nodes between groups to raise modularity, a score that compares the number of edges inside groups with the number expected by chance \cite{traag2019}. All three can use edge weights. A heavier edge pulls its two endpoints into the same community more strongly.
+
+By default every citation gets the same weight. That ignores the most informative part of a paper, its text. A citation between two papers on the same narrow topic is a stronger signal than a citation to a general method paper from another field. Sentence embeddings turn a title and abstract into a vector, and the cosine of two vectors measures how close two texts are \cite{reimers2019}.
+
+Large language models (LLMs) can judge the relation between two texts more carefully than an embedding \cite{jin2024,chen2024explor}. They are also slower and cost money for every call. Recent work uses LLMs on graphs as feature providers, predictors or annotators \cite{jin2024,chen2024explor,he2024,chen2024llmgnn,li2024}. Two recent studies use LLMs directly for community detection \cite{ni2026,gujral2025}. Both rely on large proprietary models. Neither reports how much the LLM calls cost compared with cheap embeddings.
+
+This paper follows the Topic 2 plan of the course guide for the CBCA315 minor project. We weight every edge by text similarity, ask a small open LLM to re-judge only the ambiguous edges, and measure whether the extra quality is worth the extra cost. The research question is:
+
+\emph{Does re-scoring a limited number of edge weights with a small LLM improve community detection in text-attributed citation networks enough to justify its API cost, compared with text-embedding weights alone?}
+
+Five practical questions follow. (1) Do text-similarity weights (W1) find better communities than structure alone (W0)? (2) Does replacing 10\% of the weights with LLM scores (W2) improve on W1, and for which detector? (3) Is choosing the ambiguous edges better than spending the same number of calls on random edges? (4) How do quality and cost change with the budget, the prompt wording and the model size? (5) Do communities from W2 give better seed nodes for spreading information under the Independent Cascade model \cite{kempe2003}?
+
+The contributions are as follows.
+\begin{itemize}
+\item A reproducible pipeline that joins the original text to Cora and PubMed nodes by paper ID. It fixes two alignment problems in the reference loader.
+\item A budgeted edge re-weighting method. A small open LLM (Llama 3.1 8B) re-scores at most 10\% of edges, chosen from an ambiguity band, and every call is cached and costed.
+\item A controlled comparison of W0, W1 and W2 across three detectors and five seeds, with a random-edge control, band, prompt, model and budget ablations, and a downstream influence-spread task.
+\item An answer to the cost question that also reports where the LLM does not help.
+\end{itemize}
+We do not claim that LLM edge weighting is new. The course guide proposes it. What we add is a measurement of its cost and benefit under a fixed budget.
+
+The rest of the paper is organised as follows. Section~\ref{sec:related} reviews related work. Section~\ref{sec:prelim} gives the background. Section~\ref{sec:method} describes the method. Section~\ref{sec:setup} describes the experiments. Section~\ref{sec:results} reports the results. Section~\ref{sec:concl} gives limitations and conclusions.
+
+%==================================================================
+\section{Related Work}
+\label{sec:related}
+
+\subsection{Diffusion-based community detection and influence spread}
+Kempe, Kleinberg and Tardos defined the Independent Cascade model and showed that choosing seed nodes to maximise spread is NP-hard but can be approximated by a greedy algorithm \cite{kempe2003}. Raghavan, Albert and Kumara introduced label propagation, which runs in near-linear time but gives different results for different random orders \cite{raghavan2007}. Infomap finds communities by compressing the description of a random walk \cite{rosvall2008}. Fortunato's survey defines the field and its evaluation problems \cite{fortunato2010}. Traag, Waltman and van Eck proposed Leiden, which guarantees connected communities and runs faster than Louvain \cite{traag2019}. Meena, Singh and Singh choose seeds that reach many communities in dynamic networks, using bridge nodes \cite{meena2024}. Das, Biswas and Saxena fuse homophily into a cascading process to find overlapping communities, and test on 12 real networks and 71 synthetic LFR networks \cite{das2026}. None of these methods uses node text when deciding how information flows along an edge.
+
+\subsection{Attributed and deep community detection}
+Su et al. survey deep learning for community detection \cite{su2024}. CDBNE combines a graph attention autoencoder, a modularity term and self-training, and is evaluated on Cora, CiteSeer and PubMed \cite{zhou2023}. DGCluster trains a graph neural network to maximise modularity without fixing the number of clusters \cite{bhowmick2024}. These methods need neural training and use bag-of-words features rather than the raw text.
+
+\subsection{LLMs and text-attributed graphs}
+Cora, CiteSeer and PubMed are standard citation benchmarks \cite{sen2008}. Two surveys group LLM use on graphs by the role of the LLM \cite{jin2024,li2024}. Chen et al. compare LLMs as feature providers and as direct predictors \cite{chen2024explor}. TAPE prompts an LLM to explain the likely category of each paper and uses the explanation as an extra feature. Its release provides the original Cora and PubMed text used here \cite{he2024}. LLM-GNN uses an LLM to label a small, chosen set of nodes and trains a graph neural network on them. It reaches 74.9\% accuracy on ogbn-products for less than one US dollar \cite{chen2024llmgnn}. This is the closest idea to ours, a budgeted use of the LLM, but it targets classification. Fatemi et al. show that the way a graph is written as text changes LLM accuracy a lot \cite{fatemi2024}. GraphGPT aligns graph structure with an LLM through instruction tuning \cite{tang2024}.
+
+\subsection{LLM-based community detection}
+ComGPT uses GPT-3.5 to grow a local community around one given seed node \cite{ni2026}. CommLLM writes the graph into a GPT-4o prompt and asks for the communities \cite{gujral2025}. Both depend on large proprietary models, send large prompts and do not compare against cheap embedding weights at equal cost.
+
+\subsection{Comparison and gap}
+Table~\ref{tab:related} compares the closest works.
+
+\begin{table*}[!t]
+\centering
+\caption{Comparison of closest related work with this paper.}
+\label{tab:related}
+\small
+\begin{tabular}{@{}p{1.6cm}p{4.2cm}p{3.6cm}p{2.9cm}p{3.3cm}@{}}
+\toprule
+Work & Method & Data & Uses node text & Main limit \\
+\midrule
+Label propagation \cite{raghavan2007} & Label propagation & Real networks & No & Random, unstable results \\
+Infomap \cite{rosvall2008} & Compress a random walk & Citation networks of journals & No & Edge weights must be given \\
+Leiden \cite{traag2019} & Leiden refinement step & Real and LFR graphs & No & Structure only \\
+Meena et al. \cite{meena2024} & Seeds that reach many communities (DCDIMB) & Real and synthetic dynamic networks & No & Structure only \\
+Das et al. \cite{das2026} & Homophily fusion on cascading & 12 real and 71 LFR networks & No & No text content \\
+CDBNE \cite{zhou2023} & Graph attention autoencoder, modularity, self-training & Cora, CiteSeer, PubMed & Bag of words & Neural training \\
+DGCluster \cite{bhowmick2024} & GNN trained to maximise modularity & Several real graphs & Attributes & Neural training \\
+TAPE \cite{he2024} & LLM explanations as features & Cora, PubMed, ogbn-arxiv, ogbn-products, arxiv-2023 & Yes & Supervised; one LLM call per node \\
+LLM-GNN \cite{chen2024llmgnn} & LLM labels a chosen node subset & Cora, CiteSeer, PubMed, WikiCS, OGB & Yes & Classification, not communities \\
+ComGPT \cite{ni2026} & GPT-3.5 grows a community from a seed & Dolphins, Football, Polbooks, Amazon, DBLP & Graph in prompt & Local only; proprietary LLM; cost not studied \\
+CommLLM \cite{gujral2025} & Whole graph in a GPT-4o prompt & Karate, Football, WebKB, Terrorist Attacks, Cora, CiteSeer & Graph in prompt & Prompt size limits scale; cost \\
+\textbf{This paper} & Embedding weights, small LLM re-scores 10\% of edges & Cora, PubMed, synthetic & Yes & See Section~\ref{sec:concl} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Three limits recur. First, diffusion-based detectors treat every edge as equally likely to carry information \cite{raghavan2007,rosvall2008,meena2024,das2026}. Second, cost is not measured. LLM-based community methods use large proprietary models and do not report cost against a cheap embedding baseline \cite{ni2026,gujral2025}, and surveys list efficiency as an open problem \cite{jin2024,li2024}. Third, budgeted LLM queries work for node classification \cite{chen2024llmgnn}, but querying the LLM only for uncertain edges under a fixed budget has not been tested for community detection. We address the third limit with the second in mind.
+
+%==================================================================
+\section{Preliminaries}
+\label{sec:prelim}
+\subsection{Notation}
+Let $G=(V,E)$ be an undirected citation graph with $n=|V|$ nodes and $m=|E|$ edges. Each node $v$ has a text $t(v)$, its title and abstract. A weight function $w:E\to\mathbb{R}_{>0}$ gives each edge a positive weight. A detector returns a partition $\hat{y}$ of $V$ into communities. The true classes $y$ of the dataset are used only to score a partition. They never influence the method.
+
+\subsection{Detectors}
+Asynchronous label propagation \cite{raghavan2007} updates nodes one at a time in random order, so results depend on the seed. Infomap \cite{rosvall2008} minimises the description length of a random walk. Leiden \cite{traag2019} optimises modularity and keeps communities connected. All three accept edge weights.
+
+\subsection{Independent Cascade}
+In the Independent Cascade model \cite{kempe2003} each newly active node gets one chance to activate each neighbour with probability $p$. On an undirected graph this is the same as keeping each edge live with probability $p$ and activating every node that is connected to a seed through live edges.
+
+\subsection{Metrics}
+Normalised mutual information (NMI) is $I(y;\hat{y})/\bigl((H(y)+H(\hat{y}))/2\bigr)$. The adjusted Rand index (ARI) is the Rand index corrected for chance. ACC is the accuracy after the best one-to-one matching of communities to classes found with the Hungarian algorithm. Unmatched communities count as wrong. Macro-F1 is the F1 score after the same matching, averaged over the true classes only. Modularity $Q$ is always measured on the original unweighted graph, so that W0, W1 and W2 are compared on one scale.
+
+%==================================================================
+\section{Method}
+\label{sec:method}
+\subsection{Edge weights}
+Three weight variants are built on the same graph.
+\begin{itemize}
+\item \textbf{W0} (structure only): $w(u,v)=1$.
+\item \textbf{W1} (embedding): $w(u,v)=\max\bigl(\cos(e(u),e(v)),\epsilon\bigr)$, where $e(\cdot)$ is the L2-normalised \texttt{all-MiniLM-L6-v2} embedding \cite{reimers2019} and $\epsilon=10^{-6}$ keeps weights positive.
+\item \textbf{W2} (selective LLM): $w(u,v)=$ W1, except for a selected set $S$ of edges, where $w(u,v)=\max\bigl(s(u,v)/10,\epsilon\bigr)$ and $s(u,v)\in\{0,\dots,10\}$ is the LLM score.
+\end{itemize}
+
+\subsection{Choosing the edges the LLM sees}
+An edge is ambiguous if its cosine $c$ is in the band $[a,b]=[0.3,0.6]$ taken from the course guide. Edges far below the band are clearly unrelated, and edges far above are clearly related, so the embedding is trusted there. The budget is $B=\mathrm{round}(\beta\,|E|)$ with $\beta=10\%$, which is 528 edges for Cora and 4,432 for PubMed. Ambiguous edges are sorted by their distance from the band midpoint $(a+b)/2$, and the first $B$ are taken. The rule is fixed before any label is looked at.
+
+\subsection{The LLM call}
+The model is \texttt{meta-llama/llama-3.1-8b-instruct}, reached through OpenRouter and pinned to the DeepInfra fp8 provider with fallback turned off. The temperature is 0 and the answer is at most 8 tokens. Each paper's text is cut to its first 600 characters. The prompt asks how likely information shared by one paper is to be adopted by the other, and uses the wording of the course guide. Only a whole number from 0 to 10 is accepted. Any other answer is recorded as invalid, and a network error is recorded as failed. In both cases the edge keeps its W1 weight. Every attempt is written to a ledger with tokens, cost, latency and the serving provider. Identical requests are answered from a cache. Calls stop at a hard ceiling of \$1.00.
+
+\subsection{Algorithm}
+Algorithm~\ref{alg:w2} gives the re-weighting step.
+
+\begin{algorithm}[!t]
+\caption{Budgeted LLM edge re-weighting (W2)}
+\label{alg:w2}
+\begin{algorithmic}[1]
+\Require Graph $G=(V,E)$, texts $t(v)$, band $[a,b]$, budget fraction $\beta$, LLM $f$, ceiling
+\Ensure Edge weights $w$
+\For{each $v\in V$}
+  \State $e(v)\gets \mathrm{normalise}(\mathrm{MiniLM}(t(v)))$ \Comment{once, cached}
+\EndFor
+\For{each $(u,v)\in E$}
+  \State $c(u,v)\gets e(u)\cdot e(v)$
+  \State $w(u,v)\gets \max(c(u,v),\epsilon)$ \Comment{W1}
+\EndFor
+\State $A\gets\{(u,v)\in E: a\le c(u,v)\le b\}$
+\State $S\gets$ first $\mathrm{round}(\beta|E|)$ edges of $A$ sorted by $|c(u,v)-(a+b)/2|$, then edge id
+\For{each $(u,v)\in S$, in parallel}
+  \If{the cache has $(u,v)$}
+    \State $s\gets$ cached score
+  \ElsIf{spent $\ge$ ceiling}
+    \State \textbf{stop}
+  \Else
+    \State $s\gets f(\mathrm{prompt}(t(u)[{:}600],t(v)[{:}600]))$; log tokens and cost; cache
+  \EndIf
+  \If{$s$ is an integer in $[0,10]$}
+    \State $w(u,v)\gets\max(s/10,\epsilon)$
+  \EndIf
+\EndFor
+\State \Return $w$
+\end{algorithmic}
+\end{algorithm}
+
+Evaluation then runs each variant with each detector for seeds 0 to 4, and records NMI, ARI, ACC, macro-F1, modularity and detector time for every run.
+
+\subsection{Complexity}
+Let $d=384$ be the embedding size. Embedding all texts costs $O(n\cdot L)$ transformer passes with $L\le 256$ tokens, once per dataset. Cosines for all edges cost $O(m\,d)$. Edge selection costs $O(m\log m)$ for the sort. The LLM step needs $O(B)$ API calls with $B\le 0.1\,m$, and this is the only part whose cost grows with money. Label propagation and Leiden take about $O(m)$ per iteration, and Infomap about $O(m)$ per trial with 10 trials. The Independent Cascade task costs $O(R(n+m))$ for $R=200$ simulations, using connected components of the live-edge graphs. The budget $B$ is therefore the main control on cost.
+
+%==================================================================
+\section{Experimental Setup}
+\label{sec:setup}
+\subsection{Datasets}
+Table~\ref{tab:data} lists the datasets. Cora and PubMed come with their original titles and abstracts from the TAPE release \cite{he2024}, which is based on the standard benchmarks \cite{sen2008}. The synthetic graph is a stochastic block model with $p_{in}=0.08$ and $p_{out}=0.02$. Each node gets 12 words drawn from its community's topic list.
+
+\begin{table}[!t]
+\centering
+\caption{Datasets after preprocessing.}
+\label{tab:data}
+\small
+\begin{tabular}{@{}lrrrp{2.4cm}@{}}
+\toprule
+Dataset & Nodes & Edges & Classes & Text \\
+\midrule
+Cora & 2,708 & 5,278 & 7 & Title and abstract (2,373 both, 293 title only, 42 abstract only) \\
+PubMed & 19,716 & 44,323 & 3 & Title and abstract \\
+Synthetic & 400 & 2,682 & 4 planted & 12 topic words \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Preprocessing is the same for every method. Citations are made undirected, and self-loops and duplicate edges are removed. All nodes are kept. One PubMed paper (PMID 17874530) has no title or abstract, so it is removed together with its one edge. Class labels are used only to compute NMI, ARI, ACC and macro-F1.
+
+\subsection{Text alignment}
+The reference loader of the TAPE repository pairs PubMed text with nodes by row position. The text file has one record without a PMID at row 2,459, so every later row would get the wrong paper. Its Cora loader also keeps the previous paper's abstract when a paper has none. Our loader joins both datasets by paper ID and uses only the paper's own text.
+
+\subsection{Methods compared}
+The baselines are W0 and W1 with each of the three detectors, and W2 with randomly chosen edges and the same number of calls. Leiden is always included. We run every method ourselves under one protocol. We do not import published scores from TAPE, ComGPT or CommLLM, because those papers solve other tasks: supervised classification, local community search and whole-graph prompting. If a published clustering baseline is required, CDBNE \cite{zhou2023} is the fallback.
+
+\subsection{Implementation}
+Label propagation uses NetworkX (\texttt{asyn\_lpa\_communities}). Leiden and Infomap use python-igraph, with Leiden maximising modularity and Infomap running 10 trials. Python's random generator is seeded before each igraph call. The code uses Python 3.13.15, NetworkX 3.7, python-igraph 1.0.0, sentence-transformers 5.7.0, PyTorch 2.14.1 (CPU), scikit-learn 1.9.1 and SciPy 1.18.1. The embedding model is pinned to Hugging Face revision \texttt{1110a243}. Experiments ran in a Linux (aarch64) virtual machine with 4 vCPUs and 4 GB of RAM, on CPU only.
+
+\subsection{LLM provider}
+The 8B model ran on the OpenRouter provider \texttt{deepinfra/fp8}, pinned with no fallback. The 70B ablation model (\texttt{meta-llama/llama-3.1-70b-instruct}) ran on \texttt{amazon-bedrock}, because on 26 November 2026 it was the only provider OpenRouter listed for that model. The ledger also holds 100 calls of the 8B model that were served by \texttt{groq} during a short provider switch: 50 for the Cora W2 run and 50 for a prompt check.
+
+\subsection{Protocol}
+\begin{itemize}
+\item \textbf{Seeds.} Seeds 0, 1, 2, 3 and 4 for every detector run. The seed is logged in every row.
+\item \textbf{Main comparison.} 2 datasets $\times$ 3 variants $\times$ 3 detectors $\times$ 5 seeds is 90 runs.
+\item \textbf{Ablation.} W2 with random edges, bands $[0.2,0.5]$ and $[0.4,0.7]$, a plain ``topic similarity'' prompt on Cora, and Llama 3.1 70B on Cora.
+\item \textbf{Sensitivity.} Budget of 5\%, 10\% and 20\% of edges.
+\item \textbf{Sanity check.} The synthetic graph with all variants, all detectors and 5 seeds.
+\item \textbf{Significance.} Wilcoxon signed-rank test, paired by dataset, detector and seed. With five pairs the smallest possible two-sided $p$ is $2/32=0.0625$, so a test per cell cannot reach $p<0.05$. A pooled test over 30 pairs was declared before the results were seen. Effect size is the matched-pairs rank-biserial correlation.
+\item \textbf{Downstream task.} Independent Cascade with $p=0.05$, $k\in\{5,10,20,50\}$ and 200 simulations. Seeds come from the Leiden communities (seed 0) of W0, W1 and W2, and are compared with the top-$k$ nodes by degree. The 200 live-edge samples are drawn once and shared by all strategies, and every strategy gets exactly $k$ distinct seeds.
+\item \textbf{Tuning.} None. The band, budget and prompt come from the course guide and are fixed before evaluation.
+\item \textbf{LLM reuse.} One cached answer per edge, reused by all detectors and seeds.
+\end{itemize}
+
+%==================================================================
+\section{Results}
+\label{sec:results}
+% All numbers in this section come from outputs/. Figures are copied from outputs/charts/ into figures/.
+\input{results_tables.tex}
+\input{results_text.tex}
+
+\figifexists{fig1_main_nmi}{NMI of W0, W1 and W2 for each detector and dataset.}{fig:main}
+\figifexists{fig2_budget_vs_nmi}{NMI against LLM budget (5, 10 and 20\% of edges).}{fig:budget}
+\figifexists{fig3_cosine_band}{Distribution of edge cosine similarity with the LLM band $[0.3,0.6]$ marked.}{fig:band}
+\figifexists{fig4_llm_score_vs_class}{Share of edges inside one class for each LLM score.}{fig:score}
+\figifexists{fig5_diffusion}{Influence spread under the Independent Cascade model for community-based and degree-based seeds.}{fig:diffusion}
+
+%==================================================================
+\section{Limitations and Conclusion}
+\label{sec:concl}
+\subsection{Limitations}
+The study has these limits, which follow from its design.
+\begin{itemize}
+\item Two real datasets are used, both with short scientific text, and one synthetic graph. Results may differ for other kinds of networks.
+\item One small LLM (Llama 3.1 8B) on one pinned endpoint is the main model. The prompt and model ablations run on Cora only.
+\item Each paper is cut to its first 600 characters before it is sent to the LLM.
+\item Total LLM spending is capped at \$1.00. The runs used \$0.2151, so the cap did not bind.
+\item With five seeds, a per-cell significance test cannot reach $p<0.05$, so conclusions rest on the pooled test and on effect sizes.
+\item The downstream task uses one set of Leiden communities (seed 0).
+\item True classes stand in for ground-truth communities. They are subject areas, which may not match the groups that the graph structure supports.
+\item No published clustering method is rerun as a baseline. TAPE, ComGPT and CommLLM solve different tasks.
+\end{itemize}
+
+\subsection{Conclusion}
+We studied whether a small LLM, used on only 10\% of the edges of a citation network, can improve edge weights for diffusion-based community detection beyond text embeddings, and what it costs. The method, the controls and the protocol are fixed and every LLM call is logged. The answer is no. W2 did not beat W1: over 30 paired runs the mean NMI difference was $-0.0026$, with 7 wins and 23 losses (Wilcoxon $p=0.0008$). Choosing ambiguous edges did no better than choosing random edges ($p=0.0577$), a larger budget did not help, and neither did the 70B model or a different prompt. Seeds from W2 communities spread information less well than seeds from W1 communities in six of eight cases. A likely reason is that the 8B model gave a score of 8 to most edges, but we did not test this. The method does work on the synthetic graph, and the cost is small, \$0.2151 in total. The LLM does not help here, and embedding weights are enough on these two datasets.
+Future work could try other models, other bands and larger budgets, and could compare against a published attributed clustering method.
+
+%==================================================================
+\section*{Declarations}
+\paragraph{Funding}
+% TODO: confirm with the student. The project files do not state any funding.
+\textbf{TODO: student to confirm funding statement.}
+
+\paragraph{Conflicts of interest}
+% TODO: confirm with the student. The project files do not state this.
+\textbf{TODO: student to confirm conflicts-of-interest statement.}
+
+\paragraph{Data and code availability}
+Cora and PubMed with original text come from the release linked in the TAPE repository \cite{he2024}. The code, cached LLM answers and all result files are in the GitHub repository \url{https://github.com/rajatevencodes/CBCA-315-LLM-Diffusion}. A Google Colab notebook runs the whole pipeline: \url{https://colab.research.google.com/github/rajatevencodes/CBCA-315-LLM-Diffusion/blob/main/notebooks/semantic_diffusion.ipynb}. The saved LLM answers in the repository allow the results to be reproduced without a new API key or new spending.
+
+\paragraph{Author contributions}
+R. Sharma designed and implemented the pipeline, ran the experiments and wrote the paper. Dr. Soumita Das supervised the project as guide.
+
+\paragraph{Use of AI}
+An AI assistant helped to write the code and the draft of this paper. The author checked the text, the numbers and the references. The method also uses an LLM (Llama 3.1 8B) as part of the experiments, as described in Section~\ref{sec:method}. % TODO: confirm the tool name and the journal's AI policy wording.
+
+\section*{Acknowledgment}
+The author thanks the project guide, Dr. Soumita Das, Bennett University.
+
+%==================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

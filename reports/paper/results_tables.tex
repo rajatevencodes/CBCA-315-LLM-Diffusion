@@ -1,0 +1,33 @@
+% Main results table, built from outputs/tables/t2_main_results.md (synthetic rows are in Table~\ref{tab:sanity}).
+\begin{table*}[!t]
+\centering
+\caption{Main results on Cora and PubMed: W0, W1 and W2 with three detectors (mean $\pm$ std over seeds 0 to 4). Q is modularity on the original unweighted graph. The last column is the number of communities found.}
+\label{tab:main}
+\small
+\resizebox{0.9\textwidth}{!}{%
+\begin{tabular}{@{}lllcccccr@{}}
+\toprule
+Dataset & Detector & Weights & NMI & ARI & ACC & Macro-F1 & Q & Communities \\
+\midrule
+Cora & LPA & W0 & 0.406 $\pm$ 0.004 & 0.043 $\pm$ 0.008 & 0.116 $\pm$ 0.016 & 0.215 $\pm$ 0.029 & 0.608 $\pm$ 0.015 & 570 \\
+Cora & LPA & W1 & 0.406 $\pm$ 0.002 & 0.030 $\pm$ 0.007 & 0.090 $\pm$ 0.015 & 0.182 $\pm$ 0.030 & 0.608 $\pm$ 0.016 & 523 \\
+Cora & LPA & W2 & 0.406 $\pm$ 0.002 & 0.039 $\pm$ 0.008 & 0.111 $\pm$ 0.017 & 0.216 $\pm$ 0.030 & 0.610 $\pm$ 0.006 & 524 \\
+Cora & Leiden & W0 & 0.466 $\pm$ 0.004 & 0.253 $\pm$ 0.015 & 0.385 $\pm$ 0.015 & 0.541 $\pm$ 0.015 & 0.824 $\pm$ 0.000 & 108 \\
+Cora & Leiden & W1 & 0.454 $\pm$ 0.007 & 0.193 $\pm$ 0.011 & 0.319 $\pm$ 0.014 & 0.492 $\pm$ 0.015 & 0.817 $\pm$ 0.001 & 108 \\
+Cora & Leiden & W2 & 0.449 $\pm$ 0.004 & 0.202 $\pm$ 0.013 & 0.340 $\pm$ 0.016 & 0.501 $\pm$ 0.012 & 0.817 $\pm$ 0.001 & 111 \\
+Cora & Infomap & W0 & 0.413 $\pm$ 0.001 & 0.051 $\pm$ 0.001 & 0.131 $\pm$ 0.003 & 0.256 $\pm$ 0.006 & 0.732 $\pm$ 0.002 & 283 \\
+Cora & Infomap & W1 & 0.417 $\pm$ 0.002 & 0.046 $\pm$ 0.001 & 0.118 $\pm$ 0.005 & 0.237 $\pm$ 0.009 & 0.712 $\pm$ 0.002 & 313 \\
+Cora & Infomap & W2 & 0.413 $\pm$ 0.002 & 0.045 $\pm$ 0.003 & 0.121 $\pm$ 0.009 & 0.242 $\pm$ 0.015 & 0.710 $\pm$ 0.005 & 315 \\
+\midrule
+PubMed & LPA & W0 & 0.180 $\pm$ 0.002 & 0.024 $\pm$ 0.012 & 0.103 $\pm$ 0.024 & 0.156 $\pm$ 0.026 & 0.589 $\pm$ 0.010 & 2076 \\
+PubMed & LPA & W1 & 0.184 $\pm$ 0.001 & 0.041 $\pm$ 0.005 & 0.138 $\pm$ 0.008 & 0.196 $\pm$ 0.009 & 0.610 $\pm$ 0.006 & 1788 \\
+PubMed & LPA & W2 & 0.184 $\pm$ 0.002 & 0.045 $\pm$ 0.011 & 0.145 $\pm$ 0.021 & 0.202 $\pm$ 0.023 & 0.612 $\pm$ 0.007 & 1785 \\
+PubMed & Leiden & W0 & 0.208 $\pm$ 0.004 & 0.095 $\pm$ 0.009 & 0.208 $\pm$ 0.030 & 0.319 $\pm$ 0.037 & 0.786 $\pm$ 0.001 & 43 \\
+PubMed & Leiden & W1 & 0.207 $\pm$ 0.003 & 0.084 $\pm$ 0.004 & 0.185 $\pm$ 0.019 & 0.294 $\pm$ 0.027 & 0.785 $\pm$ 0.001 & 51 \\
+PubMed & Leiden & W2 & 0.204 $\pm$ 0.002 & 0.083 $\pm$ 0.003 & 0.185 $\pm$ 0.013 & 0.299 $\pm$ 0.017 & 0.785 $\pm$ 0.001 & 45 \\
+PubMed & Infomap & W0 & 0.172 $\pm$ 0.001 & 0.007 $\pm$ 0.000 & 0.039 $\pm$ 0.001 & 0.075 $\pm$ 0.002 & 0.657 $\pm$ 0.002 & 931 \\
+PubMed & Infomap & W1 & 0.175 $\pm$ 0.000 & 0.007 $\pm$ 0.000 & 0.035 $\pm$ 0.004 & 0.069 $\pm$ 0.006 & 0.648 $\pm$ 0.003 & 968 \\
+PubMed & Infomap & W2 & 0.172 $\pm$ 0.001 & 0.007 $\pm$ 0.000 & 0.037 $\pm$ 0.001 & 0.072 $\pm$ 0.001 & 0.649 $\pm$ 0.002 & 972 \\
+\bottomrule
+\end{tabular}}
+\end{table*}
