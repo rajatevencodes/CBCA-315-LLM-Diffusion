@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Can a Small AI Help Find Research Topics?</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1c1b1a; --muted:#6b6560; --card:#f1eeec; --line:#d9d4cf;
+    --accent:#d8561b; --accent-soft:#fde3d4; --good:#2e7d4f; --bad:#b3372b;
+    --dark:#0b0b0c; --dark-ink:#f5f2ee; --dark-muted:#9b948c;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#111;overflow:hidden;font-family:var(--sans)}
+  #stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center center;background:var(--bg);color:var(--ink);overflow:hidden}
+  .slide{position:absolute;inset:0;padding:56px 72px;display:none;flex-direction:column}
+  .slide.active{display:flex}
+  .slide.dark{background:var(--dark);color:var(--dark-ink)}
+  .slide.dark .muted{color:var(--dark-muted)}
+  h1{font-family:var(--serif);font-weight:400;font-size:68px;line-height:1.08}
+  h2{font-family:var(--serif);font-weight:400;font-size:46px;line-height:1.12;margin-bottom:10px}
+  h3{font-family:var(--serif);font-weight:400;font-size:30px;line-height:1.15;margin-bottom:10px}
+  p,li{font-size:25px;line-height:1.42}
+  .lead{font-size:27px;color:var(--muted);margin-bottom:18px}
+  .muted{color:var(--muted)}
+  .eyebrow{font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px;font-weight:600}
+  .rule{width:150px;height:4px;background:var(--accent);margin:26px 0}
+  .src{position:absolute;left:72px;right:72px;bottom:26px;font-size:15px;color:var(--muted)}
+  .slide.dark .src{color:var(--dark-muted)}
+  .num{position:absolute;right:30px;bottom:26px;font-size:15px;color:var(--muted)}
+  .row{display:flex;gap:28px;flex:1;min-height:0}
+  .col{flex:1;min-width:0}
+  .cards{display:flex;gap:22px;margin-top:14px}
+  .card{flex:1;background:var(--card);padding:24px 26px;border-radius:6px}
+  .card p{font-size:22px}
+  .tag{display:inline-block;background:var(--accent-soft);color:#8a3410;font-size:14px;letter-spacing:.08em;padding:4px 10px;border-radius:3px;margin-bottom:12px;font-weight:600}
+  .big{font-family:var(--serif);font-size:84px;line-height:1;color:var(--ink)}
+  .stat p{font-size:21px;color:var(--muted)}
+  .stat h3{margin-top:10px}
+  .callout{border-left:5px solid var(--accent);background:var(--card);padding:16px 22px;font-size:23px;margin-top:16px;border-radius:0 6px 6px 0}
+  ul{padding-left:26px}
+  li{margin-bottom:8px}
+  .good{color:var(--good)} .bad{color:var(--bad)}
+  table{border-collapse:collapse;width:100%}
+  td,th{padding:10px 14px;text-align:left;font-size:21px;border-bottom:1px solid var(--line)}
+  th{font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  svg text{font-family:var(--sans)}
+  /* bars */
+  .bar{height:34px;border-radius:4px;background:var(--line);overflow:hidden;display:flex}
+  .bar i{display:block;height:100%}
+  /* step list */
+  .steps{display:flex;gap:18px;margin-top:10px}
+  .step{flex:1;border-top:3px solid var(--accent);padding-top:10px}
+  .step b{display:block;color:var(--accent);font-size:17px;margin-bottom:4px}
+  .step h3{font-size:26px;margin-bottom:6px}
+  .step p{font-size:19px;line-height:1.35}
+  /* notes + ui */
+  #notes{position:absolute;left:0;right:0;bottom:0;background:rgba(20,20,20,.94);color:#eee;font-size:20px;line-height:1.4;padding:18px 72px 22px;display:none;z-index:5}
+  #notes.on{display:block}
+  #progress{position:absolute;left:0;top:0;height:5px;background:var(--accent);width:0;z-index:6;transition:width .2s}
+  #hint{position:fixed;right:14px;bottom:10px;color:#777;font:12px var(--sans);z-index:9}
+  a{color:inherit}
+  .dark a{color:#ffb48a}
+  ol{padding-left:26px} ol li{margin-bottom:8px}
+  code{background:#ece8e4;padding:2px 6px;border-radius:3px;font-size:.9em;word-break:break-all}
+  @media print{
+    @page{size:1280px 720px;margin:0}
+    html,body{overflow:visible;background:#fff;height:auto}
+    #stage{position:static;transform:none!important;width:1280px;height:auto;overflow:visible}
+    .slide{display:flex!important;position:relative;width:1280px;height:720px;page-break-after:always;break-after:page}
+    #notes,#hint,#progress{display:none!important}
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage">
+
+<!-- 0 BASE PAPER -->
+<section class="slide" data-notes="Our base paper is TAPE, by He and others, published at ICLR 2024. In one sentence: TAPE asks a big AI to guess each paper's topic and explain why, and then uses that explanation as extra information so a graph model can classify papers better. We use its Cora and PubMed datasets, which come with the original paper text. We also read ComGPT and CommLLM, which use LLMs on graphs, as related work. The Transformer paper you see later is only an example, not our base paper.">
+  <div class="eyebrow">Slide 0 · Base paper</div>
+  <h2>Base paper</h2>
+  <div class="card" style="margin-top:22px;padding:34px 40px;flex:none">
+    <h3 style="font-size:36px;line-height:1.2">Harnessing Explanations: LLM-to-LM Interpreter for Enhanced Text-Attributed Graph Representation Learning</h3>
+    <p style="margin-top:16px;font-size:26px"><b>TAPE</b> &nbsp;·&nbsp; He, Bresson, Laurent, Perold, LeCun, Hooi &nbsp;·&nbsp; <b>ICLR 2024</b></p>
+    <p class="muted" style="margin-top:14px;font-size:24px">We use its Cora and PubMed datasets, which come with the original paper text.</p>
+  </div>
+  <div class="callout" style="font-size:24px"><b>In one sentence:</b> TAPE asks a big AI to guess each paper’s topic <b>and explain why</b>, then uses that explanation as extra information so a graph model classifies papers better.</div>
+  <p class="muted" style="margin-top:18px;font-size:21px"><b>Also read as related work:</b> ComGPT (IEEE TCSS 2026) and CommLLM (2025).</p>
+  <div class="src">Source: docs/base-paper-research.md · arXiv:2305.19523</div>
+</section>
+
+<!-- 0b WHAT TAPE DOES -->
+<section class="slide" data-notes="Here is how TAPE works, in four steps. The task is node classification: guess the topic of each paper, using its text and its citations. Step one: they give GPT-3.5 the title and abstract of a paper and ask: which topic is this? Rank your guesses and explain why. Step two: GPT-3.5 sends back a ranked list of guesses and a short explanation. Step three: a small language model called DeBERTa is trained to turn text into numbers, called features. They make three sets: one from the original text, one from the explanation, and one from the guesses. Step four: a graph neural network, a GNN, mixes each paper's features with the features of the papers it cites. They train one GNN per feature set and average the three answers. The simple idea is like a teacher who shows the working, not just the final answer, so the student learns better. Results: 89.3 percent accuracy on Cora, 95.3 percent on PubMed, and on the bigger ogbn-arxiv dataset it trains 2.88 times faster than the closest earlier method, GLEM.">
+  <div class="eyebrow">Base paper · What TAPE does</div>
+  <h2>Let a big AI explain, then a small model learns from it</h2>
+  <p class="lead" style="margin-bottom:4px"><b>TAPE’s task:</b> guess each paper’s topic (node classification) from its text and citations.</p>
+  <div class="steps">
+    <div class="step"><b>01 · ASK THE BIG AI</b><h3>GPT-3.5 reads</h3><p>The paper’s title and abstract, with the question: <i>“Which topic is this? Rank your guesses and explain why.”</i></p></div>
+    <div class="step"><b>02 · ANSWER + REASON</b><h3>Guess + why</h3><p>A ranked list of likely topics and a short explanation, written as text.</p></div>
+    <div class="step"><b>03 · TEXT → NUMBERS</b><h3>Small LM (DeBERTa)</h3><p>Trained to turn text into features. Three sets: <strong>original text</strong>, <strong>explanation</strong>, <strong>guesses</strong>.</p></div>
+    <div class="step"><b>04 · ADD CITATIONS</b><h3>Graph network (GNN)</h3><p>Mixes each paper’s features with its neighbours’. One GNN per feature set; the three answers are averaged.</p></div>
+  </div>
+  <div class="row" style="margin-top:20px;align-items:stretch;flex:none">
+    <div class="col" style="flex:1.25">
+      <div class="callout" style="margin-top:0;font-size:22px"><b>The idea in plain words:</b> like a teacher who shows the <b>working</b>, not just the answer. The explanation carries extra knowledge that the small model learns from.</div>
+    </div>
+    <div class="col stat" style="display:flex;gap:22px">
+      <div><div class="big" style="font-size:52px">89.3%</div><p style="font-size:18px">Cora accuracy</p></div>
+      <div><div class="big" style="font-size:52px">95.3%</div><p style="font-size:18px">PubMed accuracy</p></div>
+      <div><div class="big" style="font-size:52px">2.88×</div><p style="font-size:18px">faster training than GLEM (ogbn-arxiv)</p></div>
+    </div>
+  </div>
+  <div class="src">Source: He et al., ICLR 2024 (arXiv:2305.19523), method section, Table 1 and abstract. Accuracy is the best GNN with TAPE features.</div>
+</section>
+
+<!-- 0c TAPE VS OURS -->
+<section class="slide" data-notes="How does our project relate to TAPE? Both put an AI on top of a citation graph with paper text, and we use TAPE's release of Cora and PubMed with the original titles and abstracts. But the task is different. TAPE trains with the correct topics and predicts them, which is classification, and it calls GPT-3.5 for every single paper. We never show the topics to the computer. We find groups on our own, which is community detection, and the real topics are only used at the end for grading. Our AI is a small one, Llama 3.1 8B, and it reads a pair of cited papers, not one paper, and only for about 10 percent of citations. So TAPE's accuracy numbers and our NMI numbers measure different things, and we do not put them in the same table. One more thing: while loading the data we found that TAPE's PubMed loader matches text to papers by row position. One record has no ID at row 2,459, so every paper after it would get the wrong text. We match by paper ID instead.">
+  <div class="eyebrow">Base paper · TAPE vs our project</div>
+  <h2>Same kind of data, a different question</h2>
+  <table style="margin-top:6px">
+    <tr><th style="width:24%"></th><th>TAPE (base paper)</th><th>Our project</th></tr>
+    <tr><td style="font-size:19px"><b>Goal</b></td><td style="font-size:19px">Predict each paper’s topic (<b>classification</b>)</td><td style="font-size:19px">Group similar papers (<b>community detection</b>)</td></tr>
+    <tr><td style="font-size:19px"><b>Real topic labels</b></td><td style="font-size:19px">Used to <b>train</b> the model</td><td style="font-size:19px"><b>Hidden</b>; used only for grading</td></tr>
+    <tr><td style="font-size:19px"><b>What the AI reads</b></td><td style="font-size:19px">One paper at a time</td><td style="font-size:19px">A <b>pair</b> of papers joined by a citation</td></tr>
+    <tr><td style="font-size:19px"><b>How much AI</b></td><td style="font-size:19px">GPT-3.5 on <b>every</b> paper</td><td style="font-size:19px">Llama 3.1 8B on only <b>~10%</b> of citations</td></tr>
+    <tr><td style="font-size:19px"><b>Score</b></td><td style="font-size:19px">Accuracy</td><td style="font-size:19px">NMI (and ARI, modularity)</td></tr>
+  </table>
+  <div class="cards" style="margin-top:14px;gap:16px">
+    <div class="card" style="padding:14px 18px"><p style="font-size:19px"><b class="good">What we take:</b> Cora and PubMed with the original titles and abstracts, and the idea that AI-read text can improve graph learning.</p></div>
+    <div class="card" style="padding:14px 18px"><p style="font-size:19px"><b style="color:var(--accent)">What we fixed:</b> TAPE’s PubMed loader matches text by row. A record with no ID at row 2,459 shifts every later paper. We join by paper ID.</p></div>
+  </div>
+  <div class="src">Different tasks, so TAPE’s accuracy is not copied into our results table. Source: reports/paper/main.tex, docs/base-paper-research.md</div>
+</section>
+
+<!-- 1 TITLE -->
+<section class="slide dark" data-notes="Hi everyone. My project asks one simple question: can a small, cheap AI help a computer sort research papers into topics better than it could without the AI? I will show the problem, the data, what we tried, and what we found.">
+  <div style="margin:auto 0">
+    <div class="eyebrow">CBCA315 Minor Project · Topic 2</div>
+    <h1>Can a Small AI Help<br>Find Research Topics?</h1>
+    <div class="rule"></div>
+    <p style="font-size:30px">Semantic Diffusion: budgeted LLM edge weights for community detection</p>
+    <p class="muted" style="margin-top:26px;font-size:22px;color:#e8e3dd">Rajat Sharma (S24BCAU0134) &nbsp;|&nbsp; Guide: Dr. Soumita Das &nbsp;|&nbsp; Bennett University</p>
+  </div>
+  <div class="src">Code and results: github.com/rajatevencodes/CBCA-315-LLM-Diffusion</div>
+</section>
+
+<!-- 2 PROBLEM -->
+<section class="slide" data-notes="Picture a huge pile of research papers. Nobody has told us the topic of each one, and reading them all is far too slow. What we want is simple: every paper sitting on the shelf of its own topic. Doing that by hand is impossible at this size, so we ask a computer to do it.">
+  <div class="eyebrow">The problem and the goal</div>
+  <h2>From a big pile to papers on the right shelves</h2>
+  <div class="row">
+    <div class="col" style="flex:1.05">
+      <p style="margin-top:10px"><b>Today:</b></p>
+      <ul>
+        <li>A huge pile of research papers.</li>
+        <li>We don’t know the topic of each paper.</li>
+        <li>Reading them all is too slow.</li>
+      </ul>
+      <p style="margin-top:12px"><b class="good">Desired state:</b></p>
+      <ul>
+        <li>Every paper sits on the shelf of its own topic, with similar papers together.</li>
+      </ul>
+      <div class="callout"><b>So we ask a computer to do the sorting.</b> But how can a computer sort papers it can’t read like we do? Next slide.</div>
+    </div>
+    <div class="col" style="display:flex;flex-direction:column;gap:6px">
+      <div class="muted" style="font-size:16px;letter-spacing:.1em">NOW: ONE BIG PILE, NO LABELS</div>
+      <div style="height:200px"><svg id="g-grey" viewBox="0 0 520 440" width="100%" height="100%"></svg></div>
+      <div class="muted" style="font-size:16px;letter-spacing:.1em;margin-top:4px">GOAL: PAPERS ON SHELVES BY TOPIC</div>
+      <svg id="shelves" viewBox="0 0 520 190" width="100%" height="200"></svg>
+    </div>
+  </div>
+  <div class="src">Each dot in the pile is a paper; each line is a citation.</div>
+</section>
+
+<!-- 3 WHY CITATIONS -->
+<section class="slide" data-notes="How can a computer sort papers by topic? It needs a clue it can measure. Citations are a ready-made clue. When authors write a paper they cite related work, so a paper about neural networks mostly cites other neural network papers. That means a citation is a built-in hint that two papers are related. We need no reading, no labels and no AI to get it. Draw a dot per paper and a line per citation, and papers on the same topic clump together. The computer just looks for the clumps. This is called community detection. The catch, which we see next, is that not every citation means same topic.">
+  <div class="eyebrow">How, and why only citations?</div>
+  <h2>Citations are a free hint that two papers are related</h2>
+  <div class="row">
+    <div class="col" style="flex:1.1">
+      <h3 style="margin-top:6px">Why citations?</h3>
+      <ul>
+        <li>Authors cite <b>related</b> work. A neural-network paper mostly cites other neural-network papers.</li>
+        <li>So each citation is a <b>built-in hint</b> that two papers are related.</li>
+        <li>It is <b>already there</b>: no reading, no labels, no AI needed.</li>
+      </ul>
+      <h3 style="margin-top:14px">How the computer uses it</h3>
+      <ul>
+        <li>Paper = <b>dot</b>. Citation = <b>line</b>.</li>
+        <li>Papers on the same topic cite each other a lot, so they <b>clump</b> together.</li>
+        <li>The computer finds the clumps. Each clump is a topic. This is <b>community detection</b>.</li>
+      </ul>
+    </div>
+    <div class="col"><svg id="g-color" viewBox="0 0 520 440" width="100%" height="100%"></svg></div>
+  </div>
+  <div class="src">The catch: citations are only a hint, not a guarantee. Next slide.</div>
+</section>
+
+<!-- 4 WHERE IT GOES WRONG -->
+<section class="slide" data-notes="But not every citation means same topic. The Transformer paper cites Bahdanau, which is about translation with attention, a close topic. It also cites Adam, a general tool for training any neural network, not a close topic. A plain computer sees two identical lines and may pull the Transformer into the wrong crowd. Our question: if we pay a small AI to read some of these pairs, do the shelves get better?">
+  <div class="eyebrow">Where it goes wrong</div>
+  <h2>Not every citation means “same topic”</h2>
+  <div class="row">
+    <div class="col" style="flex:1.1">
+      <svg viewBox="0 0 640 400" width="100%" height="100%">
+        <line x1="320" y1="200" x2="110" y2="90" stroke="#2e7d4f" stroke-width="7"/>
+        <line x1="320" y1="200" x2="530" y2="310" stroke="#b3372b" stroke-width="3" stroke-dasharray="9 7"/>
+        <circle cx="320" cy="200" r="58" fill="#d8561b"/>
+        <text x="320" y="196" text-anchor="middle" fill="#fff" font-size="20" font-weight="700">Transformer</text>
+        <text x="320" y="220" text-anchor="middle" fill="#fff" font-size="15">“Attention Is All You Need”</text>
+        <circle cx="110" cy="90" r="44" fill="#e7f1ea" stroke="#2e7d4f" stroke-width="3"/>
+        <text x="110" y="95" text-anchor="middle" font-size="19" font-weight="700" fill="#1c1b1a">Bahdanau</text>
+        <text x="110" y="152" text-anchor="middle" font-size="15" fill="#2e7d4f">close topic: translation</text>
+        <circle cx="530" cy="310" r="44" fill="#f7e4e1" stroke="#b3372b" stroke-width="3"/>
+        <text x="530" y="316" text-anchor="middle" font-size="19" font-weight="700" fill="#1c1b1a">Adam</text>
+        <text x="530" y="372" text-anchor="middle" font-size="15" fill="#b3372b">not close: trains any network</text>
+      </svg>
+    </div>
+    <div class="col">
+      <p>Both are citations, so a plain computer sees <b>two identical lines</b>.</p>
+      <p style="margin-top:14px">The Adam line can pull the Transformer toward the wrong crowd and shelve it in the wrong place.</p>
+      <div class="callout"><b>Our question:</b> if we pay a small AI to read some of these pairs, do the shelves get better?</div>
+    </div>
+  </div>
+  <div class="src">Source: Vaswani et al. (2017), arXiv:1706.03762, references [2] and [20]</div>
+</section>
+
+<!-- AIM -->
+<section class="slide" data-notes="Here is exactly what we are trying to solve. Our aim: find out whether paying a small AI to re-check only the unsure citations gives better topic groups than free text matching, and whether any gain is worth the cost. To answer that we ask five concrete questions, from the simplest, does text help at all, to the last, do better groups pick better starting points for spreading information.">
+  <div class="eyebrow">Our aim</div>
+  <h2>What are we trying to solve?</h2>
+  <div class="callout" style="font-size:30px;line-height:1.35;margin-top:6px;padding:22px 28px"><b>Aim:</b> find out whether paying a <b>small AI</b> to re-check only the <b>unsure citations</b> gives <b>better topic groups</b> than free text matching, and whether any gain is <b>worth the cost</b>.</div>
+  <h3 style="margin-top:20px">Five questions we answer</h3>
+  <div class="row" style="gap:36px">
+    <div class="col"><ol style="padding-left:28px">
+      <li style="font-size:22px">Does text (W1) beat citations alone (W0)?</li>
+      <li style="font-size:22px">Does the AI on about 10% of lines (W2) beat W1?</li>
+      <li style="font-size:22px">Does choosing the unsure lines beat choosing random lines?</li></ol></div>
+    <div class="col"><ol start="4" style="padding-left:28px">
+      <li style="font-size:22px">How do quality and cost change with budget, prompt wording and model size?</li>
+      <li style="font-size:22px">Do better groups pick better starting nodes for spreading information?</li></ol></div>
+  </div>
+  <div class="src">Source: docs/01_project_understanding.md (research questions)</div>
+</section>
+
+<!-- 5 DATA -->
+<section class="slide" data-notes="We used three datasets. Cora and PubMed are real citation networks with the paper text included. Synthetic is a graph we built ourselves with four planted groups, so we know the right answer and can check the pipeline works. The real topic labels are never shown to the computer. We only use them at the end to grade.">
+  <div class="eyebrow">The data</div>
+  <h2>Three paper collections: two real, one made up as a check</h2>
+  <div class="cards">
+    <div class="card"><span class="tag">REAL · MAIN TEST</span><h3>Cora</h3>
+      <p><b>2,708</b> papers<br><b>5,278</b> citations<br><b>7</b> real topics<br>~138 words per paper</p>
+      <p class="muted" style="margin-top:10px">Classic machine-learning papers.</p></div>
+    <div class="card"><span class="tag">REAL · BIGGER TEST</span><h3>PubMed</h3>
+      <p><b>19,716</b> papers<br><b>44,323</b> citations<br><b>3</b> real topics<br>~241 words per paper</p>
+      <p class="muted" style="margin-top:10px">Medical papers (diabetes), longer text.</p></div>
+    <div class="card"><span class="tag">SANITY CHECK</span><h3>Synthetic</h3>
+      <p><b>400</b> papers<br><b>2,682</b> citations<br><b>4</b> planted groups<br>12 words per paper</p>
+      <p class="muted" style="margin-top:10px">Built by us. We know the right answer.</p></div>
+  </div>
+  <div class="callout">Every paper comes with its text. The real topic labels are <b>never shown to the computer</b>. They are used only at the end to grade it.</div>
+  <div class="src">Source: Cora and PubMed from the TAPE release (raw text); table in outputs/tables/t1_datasets.md</div>
+</section>
+
+<!-- DOTS LINES SURE -->
+<section class="slide" data-notes="Two quick ideas before the weights. First, papers and citations are different things: a paper is a dot, a citation is a line between two dots, and there are usually more lines than dots. In Cora, 2,708 papers but 5,278 citations. Second, what sure means. Each line gets a score from 0 to 1 for how similar the words of its two papers are. Very high or very low scores are clear, so we call them sure. Scores in the middle are borderline, so we call them unsure, like a student with 45 marks who needs a second look. Sure does not mean correct. It only means the score is clear. The real topics are never used here.">
+  <div class="eyebrow">Two ideas first</div>
+  <h2>Dots, lines, and what “sure” means</h2>
+  <div class="row" style="gap:36px">
+    <div class="col">
+      <h3 style="margin-top:6px">Papers ≠ citations</h3>
+      <p style="font-size:22px"><b>Paper</b> = a dot. <b>Citation</b> = a line between two dots. Real collections usually have more lines than dots.</p>
+      <table style="margin-top:8px">
+        <tr><th>Dataset</th><th>Papers</th><th>Citations</th></tr>
+        <tr><td>Cora</td><td>2,708</td><td>5,278</td></tr>
+        <tr><td>PubMed</td><td>19,716</td><td>44,323</td></tr>
+      </table>
+    </div>
+    <div class="col">
+      <h3 style="margin-top:6px">Sure vs unsure</h3>
+      <p style="font-size:22px">Each citation gets a <b>text score</b> from 0 to 1: how similar are the words of the two papers?</p>
+      <svg viewBox="0 0 520 120" width="100%" style="margin-top:8px">
+        <rect x="0" y="30" width="156" height="40" fill="#e7f1ea"/>
+        <rect x="156" y="30" width="156" height="40" fill="#d8561b"/>
+        <rect x="312" y="30" width="208" height="40" fill="#e7f1ea"/>
+        <text x="78" y="56" text-anchor="middle" font-size="16" fill="#1c1b1a">SURE: different</text>
+        <text x="234" y="56" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">UNSURE</text>
+        <text x="416" y="56" text-anchor="middle" font-size="16" fill="#1c1b1a">SURE: similar</text>
+        <text x="156" y="96" text-anchor="middle" font-size="15" fill="#6b6560">0.3</text>
+        <text x="312" y="96" text-anchor="middle" font-size="15" fill="#6b6560">0.6</text>
+      </svg>
+      <p style="font-size:21px;margin-top:6px">Like marks: 95 or 10 is a clear pass or fail. 45 is borderline, so look again.</p>
+    </div>
+  </div>
+  <div class="callout" style="font-size:21px"><b>“Sure” only means the score is clear, not that it is right.</b> Real topics are never used here.</div>
+  <div class="src">Source: outputs/dataset_stats.csv; band 0.3 to 0.6 from src/config.py</div>
+</section>
+
+<!-- BEFORE COSINE -->
+<section class="slide" data-notes="This is the key order of events. Before cosine, every citation is the same: we have not looked at any text, so no line is sure or unsure. Then cosine runs on every single citation and gives each one a number. Only after that do we look at the numbers and stick a label on each line. Clear numbers, very low or very high, are sure. Middle numbers are unsure. So unsure is not a type of citation, it is a label we create after cosine. Only the unsure lines are candidates for the AI.">
+  <div class="eyebrow">The order of events</div>
+  <h2>“Unsure” is created after cosine, not before</h2>
+  <div style="display:grid;grid-template-columns:23% 24% 27% 26%;row-gap:14px;column-gap:10px;margin-top:18px;align-items:center">
+    <div></div>
+    <div><span class="tag" style="margin:0">1 · BEFORE COSINE</span><div class="muted" style="font-size:17px;margin-top:6px">every line is equal</div></div>
+    <div><span class="tag" style="margin:0">2 · COSINE ON EVERY LINE</span><div class="muted" style="font-size:17px;margin-top:6px">each gets a number</div></div>
+    <div><span class="tag" style="margin:0">3 · LABEL BY NUMBER</span><div class="muted" style="font-size:17px;margin-top:6px">only now: sure or unsure</div></div>
+    <div style="font-size:21px"><b>A → B</b></div>
+    <div><div style="height:16px;width:60%;background:#9a938c;border-radius:3px"></div><div class="muted" style="font-size:16px;margin-top:4px">equal, no info yet</div></div>
+    <div><div style="height:16px;width:85%;background:#d8561b;border-radius:3px"></div><div style="font-size:19px;margin-top:4px"><b>0.85</b></div></div>
+    <div><span class="tag" style="margin:0;background:#e7f1ea;color:#1f5f3a">SURE (similar)</span></div>
+    <div style="font-size:21px"><b>C → D</b></div>
+    <div><div style="height:16px;width:60%;background:#9a938c;border-radius:3px"></div><div class="muted" style="font-size:16px;margin-top:4px">equal, no info yet</div></div>
+    <div><div style="height:16px;width:10%;background:#d8561b;border-radius:3px"></div><div style="font-size:19px;margin-top:4px"><b>0.10</b></div></div>
+    <div><span class="tag" style="margin:0;background:#e7f1ea;color:#1f5f3a">SURE (different)</span></div>
+    <div style="font-size:21px"><b>E → F</b></div>
+    <div><div style="height:16px;width:60%;background:#9a938c;border-radius:3px"></div><div class="muted" style="font-size:16px;margin-top:4px">equal, no info yet</div></div>
+    <div><div style="height:16px;width:45%;background:#d8561b;border-radius:3px"></div><div style="font-size:19px;margin-top:4px"><b>0.45</b></div></div>
+    <div><span class="tag" style="margin:0;background:#d8561b;color:#fff">UNSURE</span></div>
+  </div>
+  <div class="callout" style="margin-top:24px"><b>“Unsure” is not a kind of citation.</b> It is a label we stick on a line <b>after</b> cosine, because its number landed in the middle (0.3 to 0.6). Only these lines can go to the AI.</div>
+  <div class="src">Before cosine = W0 (all lines equal). Cosine on every line = W1.</div>
+</section>
+
+<!-- UNSURE CITATIONS -->
+<section class="slide" data-notes="Here is how the unsure citations are created. We count citations, the lines, not papers. In Cora there are 5,278 citations. Step one: every citation gets a text score, the cosine similarity of the two papers' words, from 0 to 1. Step two: scores below 0.3 or above 0.6 are sure, 1,885 lines, and we trust the free text score. Scores between 0.3 and 0.6 are unsure, 3,393 lines. Step three: we cannot afford to ask the AI about all of them, so the budget is 10 percent of all lines, 528. We pick the unsure ones closest to the middle, 0.45, and send only those to the AI. In PubMed it is the same idea: 44,323 citations, 15,798 unsure, 4,432 sent to the AI.">
+  <div class="eyebrow">Step by step</div>
+  <h2>How the “unsure” citations are created</h2>
+  <p class="lead" style="margin-bottom:8px">Shown for Cora. We count <b>citations (lines)</b>, not papers.</p>
+  <div class="steps" style="margin-top:4px">
+    <div class="step"><b>1 · START</b><h3>5,278 citations</h3><p>Each line joins two papers. We have the text of both.</p></div>
+    <div class="step"><b>2 · SCORE EVERY LINE</b><h3>Cosine 0 to 1</h3><p>How close are the words of the two papers? Free, done for all lines.</p></div>
+    <div class="step"><b>3 · SPLIT</b><h3>Sure vs unsure</h3><p>Below 0.3 or above 0.6 = sure. Between 0.3 and 0.6 = unsure.</p></div>
+    <div class="step"><b>4 · BUDGET</b><h3>Only 10% to the AI</h3><p>The 528 unsure lines nearest the middle (0.45) go to the AI.</p></div>
+  </div>
+  <div style="margin-top:26px">
+    <div class="bar" style="height:46px">
+      <i style="width:35.7%;background:#2e7d4f"></i>
+      <i style="width:10%;background:#d8561b"></i>
+      <i style="width:54.3%;background:#e6b9a3"></i>
+    </div>
+    <div style="display:flex;gap:0;margin-top:8px;font-size:19px;line-height:1.3">
+      <div style="width:35.7%;padding-right:10px"><b class="good">1,885 sure</b><br>keep the free text score</div>
+      <div style="width:10%;padding-right:10px;color:#a63f0e"><b>528</b><br>to the AI</div>
+      <div style="width:54.3%"><b style="color:#a8613f">2,865 unsure, over budget</b><br>keep the free text score too</div>
+    </div>
+  </div>
+  <div class="callout" style="font-size:21px;margin-top:14px">PubMed, same idea: 44,323 citations → 15,798 unsure → <b>4,432</b> sent to the AI. Real topic labels play no part in any of this.</div>
+  <div class="src">Source: outputs/embedding_log.json (in_band, llm_budget) and src/edge_weights.py</div>
+</section>
+
+<!-- 6 THREE WAYS -->
+<section class="slide" data-notes="Now the three ways. The dots and lines never change. Only the strength number written on each line changes. A strong line tells the group finder these two papers belong together. W0: every line is 1, so nothing is told apart. W1: the strength is the text score, so a close-topic line is strong and a distant-topic line is weak. W2: same as W1, except on the unsure lines, where a small AI reads both papers and gives a score from 0 to 10, and we divide by 10 to use as the strength. Sure lines keep their W1 number. The numbers in the table are only examples to show the idea.">
+  <div class="eyebrow">Our idea</div>
+  <h2>Three ways to give each line a strength</h2>
+  <p class="lead" style="margin-bottom:6px">Same dots, same lines. Only the number on each line changes. A <b>strong</b> line pulls two papers into the same group.</p>
+  <table>
+    <tr><th style="width:30%">Citation (line)</th><th><span class="tag" style="margin:0">W0 · NO HELP</span></th><th><span class="tag" style="margin:0">W1 · WORDS · FREE</span></th><th><span class="tag" style="margin:0">W2 · WORDS + AI · PAID</span></th></tr>
+    <tr><td><b>Transformer → Bahdanau</b><br><span class="muted" style="font-size:17px">close topic, sure</span></td><td>1</td><td><b class="good">high</b> (e.g. 0.8)</td><td><b class="good">0.8</b> same as W1</td></tr>
+    <tr><td><b>Transformer → Adam</b><br><span class="muted" style="font-size:17px">not close, sure</span></td><td>1</td><td><b class="bad">low</b> (e.g. 0.2)</td><td><b class="bad">0.2</b> same as W1</td></tr>
+    <tr><td><b>A pair in the middle</b><br><span class="muted" style="font-size:17px">unsure (0.3 to 0.6)</span></td><td>1</td><td>0.45</td><td><b style="color:var(--accent)">AI says 8 / 10 → 0.8</b></td></tr>
+  </table>
+  <div class="cards" style="margin-top:14px;gap:16px">
+    <div class="card" style="padding:14px 18px"><p style="font-size:19px"><b>W0:</b> every line = 1. Nothing is told apart.</p></div>
+    <div class="card" style="padding:14px 18px"><p style="font-size:19px"><b>W1:</b> the words decide. Strength = text score.</p></div>
+    <div class="card" style="padding:14px 18px"><p style="font-size:19px"><b>W2:</b> W1, but on unsure lines a small AI (Llama 3.1 8B) re-scores, score ÷ 10.</p></div>
+  </div>
+  <div class="src">Numbers in the table are examples to show the idea. Source: src/edge_weights.py and src/llm_scoring.py</div>
+</section>
+
+<!-- 7 HOW W2 WORKS -->
+<section class="slide" data-notes="Here is how W2 chooses. Most lines are either clearly similar or clearly different, so we trust W1. Only the middle zone, cosine between 0.3 and 0.6, is unsure. That is about 10 percent of the lines. We send only those to the small AI, which reads the first 600 characters of each paper and gives a score from 0 to 10. That score replaces the W1 number. This keeps the cost low.">
+  <div class="eyebrow">How the AI is used</div>
+  <h2>The AI only sees the lines the computer is unsure about</h2>
+  <svg viewBox="0 0 1136 250" width="100%" style="margin-top:22px">
+    <rect x="0" y="40" width="340" height="60" fill="#f7e4e1"/>
+    <rect x="340" y="40" width="300" height="60" fill="#d8561b"/>
+    <rect x="640" y="40" width="496" height="60" fill="#e7f1ea"/>
+    <text x="170" y="78" text-anchor="middle" font-size="22" fill="#1c1b1a">clearly different</text>
+    <text x="490" y="78" text-anchor="middle" font-size="22" font-weight="700" fill="#fff">UNSURE → ask the AI</text>
+    <text x="888" y="78" text-anchor="middle" font-size="22" fill="#1c1b1a">clearly similar</text>
+    <text x="0" y="128" font-size="20" fill="#6b6560">0</text>
+    <text x="340" y="128" text-anchor="middle" font-size="20" fill="#6b6560">0.3</text>
+    <text x="640" y="128" text-anchor="middle" font-size="20" fill="#6b6560">0.6</text>
+    <text x="1136" y="128" text-anchor="end" font-size="20" fill="#6b6560">1</text>
+    <text x="568" y="20" text-anchor="middle" font-size="18" fill="#6b6560" letter-spacing="1.5">TEXT SIMILARITY (COSINE) BETWEEN THE TWO PAPERS</text>
+    <text x="170" y="175" text-anchor="middle" font-size="20" fill="#1c1b1a">keep W1 strength</text>
+    <text x="490" y="175" text-anchor="middle" font-size="20" font-weight="700" fill="#8a3410">Llama 3.1 8B reads the first</text>
+    <text x="490" y="202" text-anchor="middle" font-size="20" font-weight="700" fill="#8a3410">600 characters of each paper</text>
+    <text x="490" y="229" text-anchor="middle" font-size="20" font-weight="700" fill="#8a3410">and scores 0 to 10</text>
+    <text x="888" y="175" text-anchor="middle" font-size="20" fill="#1c1b1a">keep W1 strength</text>
+  </svg>
+  <div class="callout">Budget: at most <b>10%</b> of all lines, the unsure ones nearest the middle (0.45). That is 528 lines in Cora and 4,432 in PubMed. The AI’s score <b>replaces</b> the W1 number on those lines.</div>
+  <div class="src">Source: project files src/edge_weights.py and src/llm_scoring.py</div>
+</section>
+
+<!-- 8 HOW TESTED -->
+<section class="slide" data-notes="Three group-finding methods were used so the result does not depend on one method. Each run is repeated five times and averaged. Grading uses NMI, a match score between our groups and the real topics. 1 is a perfect match and 0 is no match. The real topics are used only for grading, never to help the computer.">
+  <div class="eyebrow">How we tested it</div>
+  <h2>A fair test, graded against the real topics</h2>
+  <div class="steps">
+    <div class="step"><b>01 · DATA</b><h3>Cora, PubMed</h3><p>Two real collections. Synthetic is the sanity check.</p></div>
+    <div class="step"><b>02 · GROUP FINDERS</b><h3>Three methods</h3><p>Label Propagation, Leiden, Infomap. Each runs on W0, W1 and W2.</p></div>
+    <div class="step"><b>03 · AI WORKLOAD</b><h3>528 + 4,432</h3><p>Unsure lines sent to the AI in Cora and PubMed.</p></div>
+    <div class="step"><b>04 · FAIR TEST</b><h3>5 repeats</h3><p>Seeds 0 to 4. We report the average.</p></div>
+  </div>
+  <h3 style="margin-top:34px">05 · Grading with NMI = <b>Normalized Mutual Information</b></h3>
+  <svg viewBox="0 0 1136 110" width="100%">
+    <defs><linearGradient id="gr" x1="0" x2="1"><stop offset="0" stop-color="#f7e4e1"/><stop offset="1" stop-color="#d8561b"/></linearGradient></defs>
+    <rect x="0" y="22" width="1136" height="26" rx="4" fill="url(#gr)"/>
+    <text x="0" y="78" font-size="20" fill="#1c1b1a">0 = our groups don’t match the real topics</text>
+    <text x="1136" y="78" text-anchor="end" font-size="20" fill="#1c1b1a">1 = a perfect match</text>
+    <text x="0" y="104" font-size="16" fill="#6b6560">Real topics are used only for grading, never to help the computer.</text>
+  </svg>
+  <div class="src">Source: project files src/config.py and src/detect.py; outputs/tables/t2_main_results.md</div>
+</section>
+
+<!-- 9 RESULT -->
+<section class="slide" data-notes="The result: the AI did not help. W2 beat the free W1 in only 7 of 30 paired runs and lost 23. The average change was slightly negative and the test says it is not luck. The reason is score collapse: out of almost 16 thousand answers, 13 thousand were an 8. A score that is nearly always the same cannot tell a close pair from a distant one. All of this cost about 21 cents.">
+  <div class="eyebrow">Result</div>
+  <h2>The AI did not help</h2>
+  <div class="row" style="align-items:flex-start;margin-top:14px">
+    <div class="col stat"><div class="big">7 / 30</div><h3>Win rate</h3><p>W2 (with AI) beat W1 (free) in 7 paired runs and lost 23.</p></div>
+    <div class="col stat"><div class="big">−0.0026</div><h3>Average NMI change</h3><p>NMI = Normalized Mutual Information. Wilcoxon test: not luck (p = 0.0008).</p></div>
+    <div class="col stat"><div class="big">$0.2151</div><h3>Cost</h3><p>For 20,071 AI calls. Cheap, but no benefit.</p></div>
+  </div>
+  <h3 style="margin-top:6px">Why: the AI gave almost everything an 8</h3>
+  <div class="bar" style="margin-top:6px"><i style="width:81.9%;background:#d8561b"></i><i style="width:18.1%;background:#cfc8c1"></i></div>
+  <div style="display:flex;justify-content:space-between;font-size:20px;margin-top:6px">
+    <span><b>13,027</b> of 15,905 valid answers were an 8 (82%)</span><span class="muted">all other scores: 18%</span>
+  </div>
+  <div class="src">Source: Fig. 1 and outputs/tables/t2_main_results.md, t3_significance.md, t6_llm_cost.md in the project GitHub</div>
+</section>
+
+<!-- 10 VERDICT -->
+<section class="slide" data-notes="Was it successful? As an experiment, yes. We asked a clear question, ran it carefully on two real datasets with repeats, a significance test, and a random-edge control, and got a clear answer. As a fix, no. The small AI does not improve the groups, so it is not worth paying for here. A clear no with solid evidence is a legitimate research result.">
+  <div class="eyebrow">So, was it successful?</div>
+  <h2>A clear answer: not worth paying for</h2>
+  <div class="cards">
+    <div class="card"><h3 class="good">As an experiment: yes</h3>
+      <ul style="margin-top:8px"><li>Clear question, measured with real data.</li><li>Two real datasets, three detectors, 5 repeats.</li><li>Random-edge control and a significance test.</li><li>We know <b>why</b> it failed (score collapse).</li></ul></div>
+    <div class="card"><h3 class="bad">As a fix: no</h3>
+      <ul style="margin-top:8px"><li>The small AI did not improve the groups.</li><li>Free text matching (W1) did as well as the paid AI (W2).</li><li>It cost money and the result got slightly worse.</li></ul></div>
+  </div>
+  <div class="callout"><b>Takeaway:</b> a small AI cannot tell a close pair from a distant one here. A negative result still tells researchers where <b>not</b> to spend budget.</div>
+  <div class="src">Source: project paper (Overleaf) and outputs/tables/</div>
+</section>
+
+<!-- 11 INSPIRATION -->
+<section class="slide" data-notes="The idea comes from our course guide, Topic 2, Section 9, which suggests weighting edges by text and using a small LLM only on ambiguous edges. We do not claim the idea is new. What is new here is measuring the quality versus cost trade-off under a fixed budget, with a random-edge control. Other LLM community papers use big expensive models and rarely report cost.">
+  <div class="eyebrow">Where this comes from</div>
+  <h2>Inspired by the course guide and recent LLM papers</h2>
+  <div class="row">
+    <div class="col">
+      <h3>Inspiration</h3>
+      <ul>
+        <li><b>Course guide, Topic 2 (Section 9):</b> weight edges by text; use a small LLM only on ambiguous edges.</li>
+        <li><b>TAPE</b> (He et al., ICLR 2024): source of Cora and PubMed with the original text.</li>
+        <li><b>ComGPT, CommLLM:</b> LLMs for community detection, using large models.</li>
+        <li><b>LLM-GNN</b> (Chen et al., ICLR 2024): spends an LLM budget on a few items, for a different task.</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>The gap we fill</h3>
+      <ul>
+        <li>Standard detectors treat every citation as equally important.</li>
+        <li>Big-LLM papers rarely report cost. Is an LLM better than cheap text matching? Unclear.</li>
+        <li>Using an LLM only on uncertain edges, under a fixed budget, is little explored.</li>
+      </ul>
+      <div class="callout">We do <b>not</b> claim LLM edge weighting is new. Our contribution is a <b>measured quality-vs-cost answer</b>.</div>
+    </div>
+  </div>
+  <div class="src">Source: docs/01_project_understanding.md, docs/base-paper-research.md</div>
+</section>
+
+<!-- 12 SOURCES -->
+<section class="slide dark" data-notes="Thank you. Everything is open: the Colab notebook reruns the whole project, the GitHub repo has all the code and results, and the Overleaf link has the full paper. Questions welcome.">
+  <div style="margin:auto 0">
+    <h2 style="font-size:56px">Thank you</h2>
+    <div class="rule" style="margin:18px 0"></div>
+    <table style="color:#f5f2ee">
+      <tr><td style="border-color:#333"><b>Run it online (Colab)</b><br><a target="_blank" rel="noopener" style="font-size:17px;word-break:break-all" href="https://colab.research.google.com/github/rajatevencodes/CBCA-315-LLM-Diffusion/blob/main/notebooks/semantic_diffusion.ipynb">https://colab.research.google.com/github/rajatevencodes/CBCA-315-LLM-Diffusion/blob/main/notebooks/semantic_diffusion.ipynb</a></td></tr>
+      <tr><td style="border-color:#333"><b>Project paper (Overleaf)</b><br><a target="_blank" rel="noopener" style="font-size:17px" href="https://www.overleaf.com/project/6b07ab9563d33d0cff55f0f1">https://www.overleaf.com/project/6b07ab9563d33d0cff55f0f1</a></td></tr>
+      <tr><td style="border-color:#333"><b>Code and results (GitHub)</b><br><a target="_blank" rel="noopener" style="font-size:17px" href="https://github.com/rajatevencodes/CBCA-315-LLM-Diffusion">https://github.com/rajatevencodes/CBCA-315-LLM-Diffusion</a></td></tr>
+      <tr><td style="border-color:#333"><b>Example paper used on the slides:</b> Vaswani et al. (2017), Attention Is All You Need, arXiv:1706.03762</td></tr>
+    </table>
+  </div>
+</section>
+
+<div id="notes"></div>
+</div>
+<div id="hint">← → navigate · F fullscreen · N notes · P print/PDF</div>
+
+<script>
+(function(){
+  var stage=document.getElementById('stage'), slides=[].slice.call(document.querySelectorAll('.slide')),
+      notes=document.getElementById('notes'), bar=document.getElementById('progress'), i=0;
+
+  // slide numbers
+  slides.forEach(function(s,n){ if(!s.classList.contains('dark')){var d=document.createElement('div');d.className='num';d.textContent=n+' / '+(slides.length-1);s.appendChild(d);} });
+
+  // seeded random so the graph is the same every time
+  function rng(seed){return function(){seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};}
+  function graph(el,colored){
+    var r=rng(42), cols=['#d8561b','#2e7d4f','#2f5fa8','#a8872f'], centers=[[130,120],[390,110],[130,320],[390,320]], nodes=[], edges=[], NS='http://www.w3.org/2000/svg', html='';
+    centers.forEach(function(c,k){ for(var j=0;j<11;j++){ var a=r()*6.283, d=20+r()*62; nodes.push({x:c[0]+Math.cos(a)*d,y:c[1]+Math.sin(a)*d,k:k}); } });
+    for(var a=0;a<nodes.length;a++) for(var b=a+1;b<nodes.length;b++){ var same=nodes[a].k===nodes[b].k; if(r()<(same?.2:.012)) edges.push([a,b]); }
+    edges.forEach(function(e){ html+='<line x1="'+nodes[e[0]].x+'" y1="'+nodes[e[0]].y+'" x2="'+nodes[e[1]].x+'" y2="'+nodes[e[1]].y+'" stroke="#bdb6af" stroke-width="1.5"/>'; });
+    nodes.forEach(function(n){ html+='<circle cx="'+n.x+'" cy="'+n.y+'" r="9" fill="'+(colored?cols[n.k]:'#9a938c')+'"/>'; });
+    if(colored) centers.forEach(function(c,k){ html+='<circle cx="'+c[0]+'" cy="'+c[1]+'" r="98" fill="none" stroke="'+cols[k]+'" stroke-width="2" stroke-dasharray="6 6" opacity=".6"/>'; });
+    el.innerHTML=html;
+  }
+  (function(){var cols=['#d8561b','#2e7d4f','#2f5fa8','#a8872f'],h='',r=rng(7);
+    for(var k=0;k<4;k++){var x=10+k*127;h+='<rect x="'+x+'" y="20" width="115" height="150" rx="4" fill="#f1eeec" stroke="'+cols[k]+'" stroke-width="2"/>';
+      for(var j=0;j<4;j++){for(var m=0;m<3;m++){var bw=22+Math.floor(r()*6);h+='<rect x="'+(x+8+m*34)+'" y="'+(30+j*36)+'" width="'+bw+'" height="28" rx="2" fill="'+cols[k]+'"/>';}}}
+    document.getElementById('shelves').innerHTML=h;})();
+  graph(document.getElementById('g-grey'),false);
+  graph(document.getElementById('g-color'),true);
+
+  function fit(){ var s=Math.min(innerWidth/1280,innerHeight/720); stage.style.transform='translate(-50%,-50%) scale('+s+')'; }
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach(function(s,k){s.classList.toggle('active',k===i);});
+    notes.textContent=slides[i].getAttribute('data-notes')||'';
+    bar.style.width=((i+1)/slides.length*100)+'%';
+    try{history.replaceState(null,'','#'+i);}catch(e){}
+  }
+  addEventListener('resize',fit); fit();
+  addEventListener('keydown',function(e){
+    var k=e.key;
+    if(k==='ArrowRight'||k==='PageDown'||k===' '||k==='Enter'){e.preventDefault();show(i+1);}
+    else if(k==='ArrowLeft'||k==='PageUp'||k==='Backspace'){e.preventDefault();show(i-1);}
+    else if(k==='Home')show(0); else if(k==='End')show(slides.length-1);
+    else if(k==='f'||k==='F'){ document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); }
+    else if(k==='n'||k==='N'){notes.classList.toggle('on');}
+    else if(k==='p'||k==='P'){print();}
+  });
+  addEventListener('click',function(e){ if(e.target.closest('a'))return; show(e.clientX>innerWidth/2?i+1:i-1); });
+  var tx=null; addEventListener('touchstart',function(e){tx=e.touches[0].clientX;});
+  addEventListener('touchend',function(e){ if(tx===null)return; var dx=e.changedTouches[0].clientX-tx; if(Math.abs(dx)>40)show(dx<0?i+1:i-1); tx=null; });
+  var h=parseInt(location.hash.slice(1),10); show(isNaN(h)?0:h);
+})();
+</script>
+</body>
+</html>
